@@ -1,0 +1,6 @@
+{
+  "name": "FreshHat Local Market",
+  "description": "A modern and complete mobile-friendly Bangladeshi local market and online grocery shopping platform with bKash and Nagad payment options.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
