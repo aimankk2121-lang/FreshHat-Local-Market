@@ -1,6 +1,6 @@
 {
-  "name": "FreshHat Local Market",
-  "description": "A modern and complete mobile-friendly Bangladeshi local market and online grocery shopping platform with bKash and Nagad payment options.",
+  "name": "Alamgir Vs Khorshed",
+  "description": "A premium and immersive 2D fighting game featuring Alamgir Hossain and Khorshed Alam, with custom combat particle engines, fire and electric special moves, distinct interactive arenas, responsive virtual controls, full PC keyboard support, adaptive AI combatants, slow-motion finishers, and programmatic synth audio controllers.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

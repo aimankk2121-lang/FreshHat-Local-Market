@@ -1,18 +1,17 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package com.example.ui
 
+import android.content.Context
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,2778 +19,2321 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.*
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.*
-import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.*
 
-enum class AppScreen {
-    Home,
-    Cart,
-    Checkout,
-    Tracking,
-    Account,
-    Admin
+// ================= GAME CONTEXT & MODELS =================
+
+enum class GameScreen {
+    Intro,
+    MainMenu,
+    Selection,
+    Battle,
+    Result
 }
 
-// Translations Dictionary
-object Trans {
-    private val bnMap = mapOf(
-        "app_name" to "ফ্রেশহাট লোকাল মার্কেট",
-        "tagline" to "তাজা বাজার সরাসরি আপনার ঘরে!",
-        "search_hint" to "আলু, মাছ, সরিষার তেল খুঁজুন...",
-        "categories" to "বিভাগসমূহ",
-        "popular_products" to "জনপ্রিয় পণ্য",
-        "offers" to "ধামাকা অফার",
-        "new_arrivals" to "নতুন কালেকশন",
-        "add_to_cart" to "ব্যাগে রাখুন",
-        "buy_now" to "অর্ডার করুন",
-        "cart_title" to "শপিং ব্যাগ",
-        "empty_cart" to "আপনার ব্যাগটি খালি!",
-        "checkout_btn" to "অর্ডার করতে এগিয়ে যান",
-        "checkout_title" to "অর্ডার সম্পন্ন করুন",
-        "name" to "আপনার নাম",
-        "phone" to "মোবাইল নাম্বার",
-        "address" to "ডেলিভারি ঠিকানা",
-        "payment" to "পেমেন্ট মাধ্যম",
-        "bkash" to "বিকাশ (bKash)",
-        "nagad" to "নগদ (Nagad)",
-        "cod" to "ক্যাশ অন ডেলিভারি",
-        "inst_bkash" to "আমাদের বিকাশ নাম্বার ০১৮৬৭১৬৪৭২৬ -এ 'সেণ্ড মানি' করে নিচে TrxID বসান:",
-        "inst_nagad" to "আমাদের নগদ নাম্বার ০১৮৬৭১৬৪৭২৬ -এ 'সেণ্ড মানি' করে নিচে TrxID বসান:",
-        "trx_hint" to "বিকাশ/নগদ ট্রানজেকশন আইডি দিন",
-        "order_confirm" to "অর্ডার প্লেস করুন",
-        "order_success" to "অর্ডার সফল হয়েছে! ধন্যবাদ!",
-        "track_order" to "অর্ডার ট্র্যাকিং",
-        "order_id" to "অর্ডার আইডি",
-        "status" to "অবস্থা",
-        "status_pending" to "অর্ডার গৃহীত হয়েছে",
-        "status_packing" to "প্যাকিং চলছে",
-        "status_shipped" to "ডেলিভারি পথে",
-        "status_delivered" to "ডেলিভারি সম্পন্ন",
-        "bazaar_manager" to "বাজার ম্যানেজার (অ্যাডমিন)",
-        "add_product" to "নতুন পণ্য যুক্ত করুন",
-        "p_name_en" to "পণ্যের নাম (ইংরেজী)",
-        "p_name_bn" to "পণ্যের নাম (বাংলা)",
-        "p_desc_en" to "পণ্যের বর্ণনা (ইংরেজী)",
-        "p_desc_bn" to "পণ্যের বর্ণনা (বাংলা)",
-        "price" to "মূল্য",
-        "old_price" to "ডিসকাউন্ট মূল্য (ঐচ্ছিক)",
-        "stock" to "স্টক সংখ্যা",
-        "p_emoji" to "আইকন / ইমোজি",
-        "save_product" to "পণ্য সংরক্ষণ করুন",
-        "manage_orders" to "অর্ডার ম্যানেজমেন্ট",
-        "change_status" to "স্ট্যাটাস পরিবর্তন করুন",
-        "discount_applied" to "১০% ডিসকাউন্ট কোড 'FRESH10' সফলভাবে অ্যাপ্লাইড!",
-        "delivery_charge" to "ডেলিভারি চার্জ",
-        "coupon_code" to "ডিসকাউন্ট কুপন কোড",
-        "login" to "লগইন / সাইনআপ",
-        "reg_title" to "মোবাইল নাম্বার দিয়ে যুক্ত হোন",
-        "verify_phone" to "মোবাইল ভেরিফিকেশন কোড",
-        "get_started" to "শুরু করুন",
-        "subtotal" to "সাবটোটাল",
-        "total" to "সর্বমোট",
-        "items" to "টি আইটেম",
-        "stock_left" to "টি অবশিষ্ট",
-        "in_stock" to "স্টকে আছে",
-        "bdt" to "৳",
-        "logout" to "লগআউট"
-    )
+enum class FighterState {
+    Idle,
+    RunForward,
+    RunBackward,
+    Jump,
+    Duck,
+    Punch,
+    Kick,
+    Special,
+    Block,
+    Hit,
+    KO,
+    Victory
+}
 
-    private val enMap = mapOf(
-        "app_name" to "FreshHat Local Market",
-        "tagline" to "Fresh bazaar straight from farmers!",
-        "search_hint" to "Search potato, hilsha, rice...",
-        "categories" to "Categories",
-        "popular_products" to "Popular Products",
-        "offers" to "Hot Discount Offers",
-        "new_arrivals" to "New Arrivals",
-        "add_to_cart" to "Add to Bag",
-        "buy_now" to "Order Now",
-        "cart_title" to "Shopping Bag",
-        "empty_cart" to "Your bag is empty!",
-        "checkout_btn" to "Proceed to Checkout",
-        "checkout_title" to "Complete Checkout",
-        "name" to "Full Name",
-        "phone" to "Mobile Number",
-        "address" to "Delivery Address",
-        "payment" to "Payment Method",
-        "bkash" to "bKash Digital Payment",
-        "nagad" to "Nagad Digital Payment",
-        "cod" to "Cash On Delivery (COD)",
-        "inst_bkash" to "Send Money to 01867164726, then enter Transaction ID below:",
-        "inst_nagad" to "Send Money to 01867164726, then enter Transaction ID below:",
-        "trx_hint" to "Enter Transaction ID here",
-        "order_confirm" to "Place Confirmed Order",
-        "order_success" to "Order Placed Successfully!",
-        "track_order" to "Track Order",
-        "order_id" to "Order ID",
-        "status" to "Status",
-        "status_pending" to "Order Received",
-        "status_packing" to "Packing Items",
-        "status_shipped" to "Out for Delivery",
-        "status_delivered" to "Delivered Successfully",
-        "bazaar_manager" to "Bazaar Admin Panel",
-        "add_product" to "Add New Product",
-        "p_name_en" to "Product Name (EN)",
-        "p_name_bn" to "Product Name (BN)",
-        "p_desc_en" to "Description (EN)",
-        "p_desc_bn" to "Description (BN)",
-        "price" to "Current Price",
-        "old_price" to "Old Price (Optional)",
-        "stock" to "Stock Quantity",
-        "p_emoji" to "Category Icon / Emoji",
-        "save_product" to "Save Product to Catalog",
-        "manage_orders" to "Order Operations",
-        "change_status" to "Update Delivery Level",
-        "discount_applied" to "10% Coupon 'FRESH10' applied successfully!",
-        "delivery_charge" to "Delivery Fee",
-        "coupon_code" to "Coupon Code",
-        "login" to "Login / Register",
-        "reg_title" to "Register with Mobile Phone",
-        "verify_phone" to "Phone OTP Code",
-        "get_started" to "Proceed",
-        "subtotal" to "Subtotal",
-        "total" to "Total Paid",
-        "items" to "items",
-        "stock_left" to "units left",
-        "in_stock" to "In Stock",
-        "bdt" to "৳",
-        "logout" to "Sign Out"
-    )
+enum class BattleArena(val displayName: String, val bgStartColor: Color, val bgEndColor: Color) {
+    Rooftop("City Rooftop Night", Color(0xFF0F172A), Color(0xFF1E1E38)),
+    FightClub("Underground Fight Club", Color(0xFF1A120B), Color(0xFF3C2A21)),
+    StreetArena("Street Fighting Arena", Color(0xFF0C131F), Color(0xFF1F2937))
+}
 
-    fun t(key: String, isBn: Boolean): String {
-        return if (isBn) bnMap[key] ?: key else enMap[key] ?: key
+data class FigSound(val type: String)
+
+object SoundSynthesizer {
+    private var sfxPrefVolume: Float = 0.8f
+    private var bgmPrefVolume: Float = 0.5f
+    private var isBgmPlaying = false
+    private var bgmThread: Thread? = null
+
+    fun setSfxVolume(vol: Float) { sfxPrefVolume = vol }
+    fun setBgmVolume(vol: Float) { bgmPrefVolume = vol }
+
+    fun playSfx(type: String) {
+        val vol = sfxPrefVolume
+        if (vol <= 0.05f) return
+        Thread {
+            try {
+                val sampleRate = 22050
+                val duration = when (type) {
+                    "punch" -> 0.12
+                    "kick" -> 0.16
+                    "special" -> 0.40
+                    "block" -> 0.08
+                    "hit" -> 0.14
+                    "ko" -> 1.20
+                    else -> 0.10
+                }
+                val numSamples = (duration * sampleRate).toInt()
+                val sample = FloatArray(numSamples)
+                val generatedSnd = ByteArray(2 * numSamples)
+
+                for (i in 0 until numSamples) {
+                    val t = i.toDouble() / sampleRate
+                    val gain = max(0.0, 1.0 - t / duration)
+                    when (type) {
+                        "punch" -> {
+                            val freq = 420.0 - (t * 2200.0)
+                            sample[i] = (sin(2 * PI * freq * t) * gain).toFloat()
+                        }
+                        "kick" -> {
+                            val freq = 320.0 - (t * 1800.0)
+                            sample[i] = (sin(2 * PI * freq * t) * gain).toFloat()
+                        }
+                        "special" -> {
+                            val freq = 120.0 + (t * 1500.0)
+                            val noise = (Math.random() * 2.0 - 1.0) * 0.35
+                            sample[i] = ((sin(2 * PI * freq * t) * 0.65 + noise) * gain).toFloat()
+                        }
+                        "block" -> {
+                            val freq = 880.0
+                            sample[i] = (sin(2 * PI * freq * t) * gain).toFloat()
+                        }
+                        "hit" -> {
+                            val freq = 160.0
+                            val noise = (Math.random() * 2.0 - 1.0) * 0.7
+                            sample[i] = ((sin(2 * PI * freq * t) * 0.3 + noise) * gain).toFloat()
+                        }
+                        "ko" -> {
+                            val freq = 80.0 - (t * 40.0)
+                            val noise = (Math.random() * 2.0 - 1.0) * 0.2
+                            sample[i] = ((sin(2 * PI * freq * t) * 0.8 + noise) * gain).toFloat()
+                        }
+                    }
+                }
+
+                var idx = 0
+                for (dVal in sample) {
+                    val valInt = (dVal * 32767 * vol).toInt().coerceIn(-32768, 32767)
+                    generatedSnd[idx++] = (valInt and 0x00ff).toByte()
+                    generatedSnd[idx++] = ((valInt and 0xff00) ushr 8).toByte()
+                }
+
+                val audioTrack = AudioTrack(
+                    AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    generatedSnd.size,
+                    AudioTrack.MODE_STATIC
+                )
+                audioTrack.write(generatedSnd, 0, generatedSnd.size)
+                audioTrack.play()
+                Thread.sleep((duration * 1000 + 40).toLong())
+                audioTrack.release()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }.start()
+    }
+
+    fun startBgm() {
+        if (isBgmPlaying) return
+        isBgmPlaying = true
+        bgmThread = Thread {
+            val sampleRate = 22050
+            val noteFreqs = doubleArrayOf(
+                110.0, 110.0, 130.8, 110.0,
+                146.8, 146.8, 164.8, 130.8,
+                98.0, 98.0, 116.5, 98.0,
+                110.0, 130.8, 146.8, 164.8
+            )
+            var currentNote = 0
+
+            while (isBgmPlaying) {
+                try {
+                    val vol = bgmPrefVolume
+                    if (vol <= 0.05f) {
+                        Thread.sleep(300)
+                        continue
+                    }
+                    val freq = noteFreqs[currentNote % noteFreqs.size]
+                    currentNote++
+
+                    val duration = 0.32
+                    val numSamples = (duration * sampleRate).toInt()
+                    val sample = FloatArray(numSamples)
+                    val generatedSnd = ByteArray(2 * numSamples)
+
+                    for (i in 0 until numSamples) {
+                        val t = i.toDouble() / sampleRate
+                        val envelope = max(0.0, 1.0 - t / duration)
+                        val wave = if (sin(2 * PI * freq * t) > 0) 1.0 else -1.0
+                        sample[i] = (wave * 0.12 * envelope).toFloat()
+                    }
+
+                    var idx = 0
+                    for (dVal in sample) {
+                        val valInt = (dVal * 32767 * vol).toInt().coerceIn(-32768, 32767)
+                        generatedSnd[idx++] = (valInt and 0x00ff).toByte()
+                        generatedSnd[idx++] = ((valInt and 0xff00) ushr 8).toByte()
+                    }
+
+                    val track = AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        generatedSnd.size,
+                        AudioTrack.MODE_STATIC
+                    )
+                    track.write(generatedSnd, 0, generatedSnd.size)
+                    if (isBgmPlaying) {
+                        track.play()
+                        Thread.sleep((duration * 1000).toLong())
+                    }
+                    track.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+        bgmThread?.start()
+    }
+
+    fun stopBgm() {
+        isBgmPlaying = false
+        bgmThread = null
+    }
+}
+
+// Particle system data model
+data class FighterParticle(
+    val id: String = UUID.randomUUID().toString(),
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    val color: Color,
+    val size: Float,
+    var maxLife: Int,
+    var life: Int,
+    val isElectric: Boolean = false,
+    val isFire: Boolean = false
+)
+
+data class PowerProjectile(
+    var x: Float,
+    var y: Float,
+    val vx: Float,
+    val ownerId: Int, // 1 or 2
+    var isActive: Boolean = true,
+    val isElectric: Boolean
+)
+
+// Main Fighter game loop state representation
+class FighterCharacter(
+    val id: Int, // 1 for Player 1, 2 for Player 2/AI
+    val name: String,
+    val isAlamgir: Boolean, // Alamgir = true, Khorshed = false
+    val colorAccent: Color,
+    var isAIControlled: Boolean = false
+) {
+    var x by mutableStateOf(0f)
+    var y by mutableStateOf(400f)
+    var vx by mutableStateOf(0f)
+    var vy by mutableStateOf(0f)
+    var health by mutableStateOf(100f)
+    var energy by mutableStateOf(30f)
+    var state by mutableStateOf(FighterState.Idle)
+    var facingRight by mutableStateOf(true)
+    var isBlocking by mutableStateOf(false)
+    var stateTimeLeft by mutableStateOf(0) // Tick constraints for lock states
+    var comboCount by mutableStateOf(0)
+    var lastHitRegistered by mutableStateOf(0L)
+
+    fun reset(startingX: Float) {
+        x = startingX
+        y = 400f
+        vx = 0f
+        vy = 0f
+        health = 100f
+        energy = 30f
+        state = FighterState.Idle
+        facingRight = id == 1
+        isBlocking = false
+        stateTimeLeft = 0
+        comboCount = 0
+        lastHitRegistered = 0L
+    }
+
+    fun updatePhysics(logicalWidth: Float) {
+        // Apply velocity physics
+        x = (x + vx).coerceIn(40f, logicalWidth - 40f)
+        y += vy
+
+        // Gravity check
+        if (y < 400f) {
+            vy += 1.8f // Gravity acceleration
+        } else {
+            y = 400f
+            vy = 0f
+            if (state == FighterState.Jump) {
+                state = FighterState.Idle
+            }
+        }
+
+        // Apply friction when on ground and idle/running states
+        if (y >= 400f) {
+            vx *= 0.70f
+        }
+
+        // Cooldown timer
+        if (stateTimeLeft > 0) {
+            stateTimeLeft--
+            if (stateTimeLeft == 0) {
+                if (state != FighterState.KO && state != FighterState.Victory) {
+                    state = if (y < 400f) FighterState.Jump else FighterState.Idle
+                    isBlocking = false
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun FreshHatMainApp() {
-    val context = LocalContext.current
-    val store = remember { LocalStoreManager(context) }
-    val scope = rememberCoroutineScope()
+    val appCtx = LocalContext.current
+    val store = remember { LocalGameStore(appCtx) }
+    var currentScreen by remember { mutableStateOf(GameScreen.Intro) }
 
-    // Application Global States
-    var isBn by remember { mutableStateOf(store.isBangla()) }
-    var isDark by remember { mutableStateOf(store.isDarkMode()) }
-    var currentScreen by remember { mutableStateOf(AppScreen.Home) }
-
-    var productsState by remember { mutableStateOf(store.getProducts()) }
-    var cartItems by remember { mutableStateOf(store.getCart()) }
-    var currentUser by remember { mutableStateOf(store.getUser()) }
-    var ordersList by remember { mutableStateOf(store.getOrders()) }
-
-    var activeCategoryFilter by remember { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedProductForDetails by remember { mutableStateOf<Product?>(null) }
-
-    // Coupon states
-    var enteredCoupon by remember { mutableStateOf("") }
-    var isCouponApplied by remember { mutableStateOf(false) }
-
-    // Notifications Overlay
-    var pushNotificationMessage by remember { mutableStateOf<String?>(null) }
-
-    // Trigger Notification Effect
-    fun triggerNotification(msg: String) {
-        scope.launch {
-            pushNotificationMessage = msg
-            delay(4000)
-            pushNotificationMessage = null
-        }
+    // Sound volumes sync
+    LaunchedEffect(Unit) {
+        SoundSynthesizer.setSfxVolume(store.getSfxVolume())
+        SoundSynthesizer.setBgmVolume(store.getBgmVolume())
+        SoundSynthesizer.startBgm()
     }
 
-    // Initialize/Sync states on change
-    LaunchedEffect(isBn) { store.setBangla(isBn) }
-    LaunchedEffect(isDark) { store.setDarkMode(isDark) }
+    // Match variables
+    var playerIsAlamgir by remember { mutableStateOf(true) }
+    var selectedArena by remember { mutableStateOf(BattleArena.Rooftop) }
+    var singlePlayerMode by remember { mutableStateOf(true) }
 
-    MyApplicationTheme(darkTheme = isDark) {
+    var matchWinnerName by remember { mutableStateOf("") }
+    var matchLogs by remember { mutableStateOf("") }
+
+    Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
+        when (screen) {
+            GameScreen.Intro -> GameIntroScreen(onFinished = { currentScreen = GameScreen.MainMenu })
+            GameScreen.MainMenu -> GameMainMenuScreen(
+                store = store,
+                onStartSolo = {
+                    singlePlayerMode = true
+                    currentScreen = GameScreen.Selection
+                },
+                onStartVersus = {
+                    singlePlayerMode = false
+                    currentScreen = GameScreen.Selection
+                },
+                onExit = {
+                    Toast.makeText(appCtx, "Thanks for playing Alamgir Vs Khorshed!", Toast.LENGTH_SHORT).show()
+                }
+            )
+            GameScreen.Selection -> CharacterSelectionScreen(
+                userSelectedAlamgir = playerIsAlamgir,
+                onSelectChar = { playerIsAlamgir = it },
+                arena = selectedArena,
+                onSelectArena = { selectedArena = it },
+                singlePlayer = singlePlayerMode,
+                onBack = { currentScreen = GameScreen.MainMenu },
+                onLaunchMatch = { currentScreen = GameScreen.Battle }
+            )
+            GameScreen.Battle -> FightingBattleArenaScreen(
+                player1IsAlamgir = playerIsAlamgir,
+                arena = selectedArena,
+                isSolo = singlePlayerMode,
+                store = store,
+                onMatchOver = { winner, logSummary ->
+                    matchWinnerName = winner
+                    matchLogs = logSummary
+                    currentScreen = GameScreen.Result
+                },
+                onQuit = { currentScreen = GameScreen.MainMenu }
+            )
+            GameScreen.Result -> MatchResultScreen(
+                winnerName = matchWinnerName,
+                summaryLogs = matchLogs,
+                onRestart = { currentScreen = GameScreen.Battle },
+                onMainMenu = { currentScreen = GameScreen.MainMenu }
+            )
+        }
+    }
+}
+
+// ================= 1. GAME INTRO ANIMATION SCREEN =================
+
+@Composable
+fun GameIntroScreen(onFinished: () -> Unit) {
+    val infiniteTransition = rememberInfiniteTransition(label = "IntroPulse")
+    val titleScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TitlePulse"
+    )
+
+    var triggerLogoAnimation by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        triggerLogoAnimation = true
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF020617)) // Pitch black sci-fi background
+            .pointerInput(Unit) {
+                detectTapGestures { onFinished() }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Retro Grid background effect
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // --- Brand Header App Bar ---
-                HeaderBar(
-                    isBn = isBn,
-                    isDark = isDark,
-                    cartCount = cartItems.sumOf { it.quantity },
-                    onCartClick = { currentScreen = AppScreen.Cart },
-                    onLangToggle = { isBn = !isBn },
-                    onThemeToggle = { isDark = !isDark },
-                    onProfileClick = { currentScreen = AppScreen.Account },
-                    onAdminClick = { currentScreen = AppScreen.Admin }
-                )
-
-                // --- Main Container Area ---
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    AnimatedContent(
-                        targetState = currentScreen,
-                        transitionSpec = {
-                            fadeIn() togetherWith fadeOut()
-                        },
-                        label = "screenTransition"
-                    ) { screen ->
-                        when (screen) {
-                            AppScreen.Home -> {
-                                HomeScreen(
-                                    isBn = isBn,
-                                    products = productsState,
-                                    activeCategory = activeCategoryFilter,
-                                    searchQuery = searchQuery,
-                                    onCategorySelect = { activeCategoryFilter = it },
-                                    onSearchChange = { searchQuery = it },
-                                    onProductSelect = { selectedProductForDetails = it },
-                                    onAddToCart = { prod ->
-                                        store.addToCart(prod.id, 1)
-                                        cartItems = store.getCart()
-                                        triggerNotification("🛒 " + if (isBn) "${prod.nameBn} ব্যাগে যুক্ত করা হয়েছে!" else "${prod.nameEn} added to Shopping Bag!")
-                                    },
-                                    onBuyNow = { prod ->
-                                        store.addToCart(prod.id, 1)
-                                        cartItems = store.getCart()
-                                        currentScreen = AppScreen.Cart
-                                    }
-                                )
-                            }
-                            AppScreen.Cart -> {
-                                CartScreen(
-                                    isBn = isBn,
-                                    cartList = cartItems,
-                                    products = productsState,
-                                    couponApplied = isCouponApplied,
-                                    couponCode = enteredCoupon,
-                                    onCouponValueChange = { enteredCoupon = it },
-                                    onApplyCoupon = {
-                                        if (enteredCoupon.uppercase() == "FRESH10") {
-                                            isCouponApplied = true
-                                            triggerNotification(Trans.t("discount_applied", isBn))
-                                        } else {
-                                            triggerNotification(if (isBn) "ভুল কুপন কোড!" else "Invalid coupon code!")
-                                        }
-                                    },
-                                    onQuantityChange = { prodId, q ->
-                                        store.updateCartQuantity(prodId, q)
-                                        cartItems = store.getCart()
-                                    },
-                                    onCheckoutClick = {
-                                        if (currentUser.isLoggedIn) {
-                                            currentScreen = AppScreen.Checkout
-                                        } else {
-                                            triggerNotification(if (isBn) "অর্ডার করতে দয়া করে আগে লগইন করুন" else "Please registration/login first to checkout.")
-                                            currentScreen = AppScreen.Account
-                                        }
-                                    },
-                                    onGoShop = { currentScreen = AppScreen.Home }
-                                )
-                            }
-                            AppScreen.Checkout -> {
-                                CheckoutScreen(
-                                    isBn = isBn,
-                                    cartList = cartItems,
-                                    products = productsState,
-                                    couponApplied = isCouponApplied,
-                                    user = currentUser,
-                                    onOrderPlaced = { order ->
-                                        store.addOrder(order)
-                                        store.clearCart()
-                                        cartItems = emptyList()
-                                        ordersList = store.getOrders()
-                                        isCouponApplied = false
-                                        enteredCoupon = ""
-                                        triggerNotification("🎉 " + Trans.t("order_success", isBn))
-                                        currentScreen = AppScreen.Tracking
-                                    },
-                                    onBack = { currentScreen = AppScreen.Cart }
-                                )
-                            }
-                            AppScreen.Tracking -> {
-                                TrackingScreen(
-                                    isBn = isBn,
-                                    orders = ordersList,
-                                    products = productsState,
-                                    onGoShopping = { currentScreen = AppScreen.Home }
-                                )
-                            }
-                            AppScreen.Account -> {
-                                AccountScreen(
-                                    isBn = isBn,
-                                    user = currentUser,
-                                    orders = ordersList,
-                                    products = productsState,
-                                    onSaveUser = { newUser ->
-                                        store.saveUser(newUser)
-                                        currentUser = store.getUser()
-                                        triggerNotification(if (isBn) "প্রোফাইল আপডেট হয়েছে!" else "Profile updated successfully!")
-                                    },
-                                    onLogout = {
-                                        store.logout()
-                                        currentUser = store.getUser()
-                                        triggerNotification(if (isBn) "লগআউট হয়েছেন" else "Successfully signed out.")
-                                    }
-                                )
-                            }
-                            AppScreen.Admin -> {
-                                AdminScreen(
-                                    isBn = isBn,
-                                    store = store,
-                                    onProductUpdated = {
-                                        productsState = store.getProducts()
-                                        triggerNotification(if (isBn) "পণ্য তালিকা আপডেট করা হয়েছে!" else "Bazaar products catalog updated!")
-                                    },
-                                    onStatusChanged = {
-                                        ordersList = store.getOrders()
-                                        triggerNotification(if (isBn) "নতুন ডেলিভারি লেভেল ট্র্যাকিং আপডেট হয়েছে!" else "Delivery track parameters adjusted!")
-                                    }
-                                )
-                            }
-                        }
+                .drawBehind {
+                    val columns = 20
+                    val rows = 15
+                    val gridColor = Color(0xFF1E293B).copy(alpha = 0.4f)
+                    for (i in 0..columns) {
+                        val x = size.width / columns * i
+                        drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
                     }
+                    for (j in 0..rows) {
+                        val y = size.height / rows * j
+                        drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                    }
+                    // Cinematic bottom horizon line
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color(0xFFE2125B).copy(alpha = 0.08f))
+                        )
+                    )
                 }
-
-                // --- Stylized Bottom Bar Navigation ---
-                BottomNavigationBar(
-                    isBn = isBn,
-                    activeScreen = currentScreen,
-                    cartCount = cartItems.sumOf { it.quantity },
-                    onNavigate = { currentScreen = it }
-                )
-            }
-
-            // --- Product Details Dialog Overlay ---
-            selectedProductForDetails?.let { prod ->
-                DetailsOverlay(
-                    product = prod,
-                    isBn = isBn,
-                    onDismiss = { selectedProductForDetails = null },
-                    onAddToCart = {
-                        store.addToCart(prod.id, 1)
-                        cartItems = store.getCart()
-                        selectedProductForDetails = null
-                        triggerNotification("🛒 " + if (isBn) "${prod.nameBn} ব্যাগে যুক্ত করা হয়েছে!" else "${prod.nameEn} added to Shopping Bag!")
-                    },
-                    onBuyNow = {
-                        store.addToCart(prod.id, 1)
-                        cartItems = store.getCart()
-                        selectedProductForDetails = null
-                        currentScreen = AppScreen.Cart
-                    }
-                )
-            }
-
-            // --- Animated Toast Push Notifications ---
-            AnimatedVisibility(
-                visible = pushNotificationMessage != null,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 80.dp)
-                    .padding(horizontal = 20.dp)
-            ) {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = FreshGreen,
-                        contentColor = Color.White
-                    ),
-                    elevation = CardDefaults.cardElevation(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Notification",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = pushNotificationMessage ?: "",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ================= HEADER BAR =================
-@Composable
-fun HeaderBar(
-    isBn: Boolean,
-    isDark: Boolean,
-    cartCount: Int,
-    onCartClick: () -> Unit,
-    onLangToggle: () -> Unit,
-    onThemeToggle: () -> Unit,
-    onProfileClick: () -> Unit,
-    onAdminClick: () -> Unit
-) {
-    val barColor = if (isDark) CardDarkBg else Color.White
-    val contentColor = if (isDark) Color.White else Color(0xFF1E293B) // slate-800
-    val dividerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0) // slate-200
-
-    Surface(
-        color = barColor,
-        contentColor = contentColor,
-        modifier = Modifier.fillMaxWidth().border(width = 0.5.dp, color = dividerColor)
-    ) {
-        Column(
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(if (isDark) SoftGreen.copy(0.15f) else LightGreenBg, RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("👒", fontSize = 22.sp)
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = Trans.t("app_name", isBn),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else FreshGreen
-                        )
-                        Text(
-                            text = Trans.t("tagline", isBn),
-                            fontSize = 10.sp,
-                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF64748B), // slate-500
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // System Lang Switch
-                    TextButton(
-                        onClick = onLangToggle,
-                        colors = ButtonDefaults.textButtonColors(contentColor = if (isDark) Color.White else FreshGreen)
-                    ) {
-                        Text(
-                            text = if (isBn) "ENG" else "বাংলা",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .border(1.dp, if (isDark) Color.White.copy(alpha = 0.4f) else FreshGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-
-                    // Night/Day Selector
-                    IconButton(onClick = onThemeToggle) {
-                        Text(
-                            text = if (isDark) "☀️" else "🌙",
-                            fontSize = 20.sp
-                        )
-                    }
-
-                    // Cart Icon Shortcut
-                    Box {
-                        IconButton(onClick = onCartClick) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingCart,
-                                contentDescription = "Shopping List",
-                                tint = if (isDark) Color.White else Color(0xFF475569) // slate-600
-                            )
-                        }
-                        if (cartCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 4.dp, end = 4.dp)
-                                    .size(17.dp)
-                                    .background(BkashPink, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = cartCount.toString(),
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    // Small Avatar Profile Icon Shortcut
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clickable(onClick = onProfileClick)
-                            .size(32.dp)
-                            .border(width = 1.5.dp, color = FreshGreen, shape = CircleShape)
-                            .padding(2.dp)
-                    ) {
-                        Image(
-                            painter = painterResource(id = com.example.R.drawable.profile_img_1780039480588),
-                            contentDescription = "Profile Link",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ================= BOTTOM BAR =================
-@Composable
-fun BottomNavigationBar(
-    isBn: Boolean,
-    activeScreen: AppScreen,
-    cartCount: Int,
-    onNavigate: (AppScreen) -> Unit
-) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.height(68.dp)
-    ) {
-        val items = listOf(
-            Triple(AppScreen.Home, Icons.Default.Home, if (isBn) "বাজার" else "Bazaar"),
-            Triple(AppScreen.Cart, Icons.Default.ShoppingCart, if (isBn) "ব্যাগ" else "Bag"),
-            Triple(AppScreen.Tracking, Icons.Default.LocationOn, if (isBn) "ট্র্যাকিং" else "Tracking"),
-            Triple(AppScreen.Account, Icons.Default.Person, if (isBn) "পছন্দ" else "Account"),
-            Triple(AppScreen.Admin, Icons.Default.Settings, if (isBn) "অ্যান্ডমিন" else "Admin")
         )
 
-        items.forEach { (screen, icon, label) ->
-            val selected = activeScreen == screen
-            NavigationBarItem(
-                selected = selected,
-                onClick = { onNavigate(screen) },
-                icon = {
-                    Box {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            tint = if (selected) FreshGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        if (screen == AppScreen.Cart && cartCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = 10.dp, y = (-10).dp)
-                                    .size(16.dp)
-                                    .background(BkashPink, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = cartCount.toString(),
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                },
-                label = {
-                    Text(
-                        text = label,
-                        fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) FreshGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = SoftGreen.copy(alpha = 0.2f)
-                )
-            )
-        }
-    }
-}
-
-// ================= HOME SCREEN =================
-@Composable
-fun HomeScreen(
-    isBn: Boolean,
-    products: List<Product>,
-    activeCategory: String?,
-    searchQuery: String,
-    onCategorySelect: (String?) -> Unit,
-    onSearchChange: (String) -> Unit,
-    onProductSelect: (Product) -> Unit,
-    onAddToCart: (Product) -> Unit,
-    onBuyNow: (Product) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Search Banner Block
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
-                    )
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(16.dp)
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchChange,
-                placeholder = { Text(Trans.t("search_hint", isBn), fontSize = 13.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onSearchChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                        }
-                    }
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedTextColor = Color.Black,
-                    unfocusedTextColor = Color.Black,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                singleLine = true
-            )
-        }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp)
-        ) {
-            // Bangladeshi bazaar visual banner element
-            item {
-                Spacer(modifier = Modifier.height(10.dp))
-                BannerPromoCard(isBn = isBn)
-            }
-
-            // Categories horizontal list
-            item {
-                Spacer(modifier = Modifier.height(15.dp))
-                Text(
-                    text = Trans.t("categories", isBn),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(end = 12.dp)
-                ) {
-                    item {
-                        CategoryBadge(
-                            title = if (isBn) "সব সামগ্রী" else "All Bazaar",
-                            emoji = "🎒",
-                            selected = activeCategory == null,
-                            color = FreshGreen,
-                            onClick = { onCategorySelect(null) }
-                        )
-                    }
-                    items(MarketDetails.categories) { cat ->
-                        CategoryBadge(
-                            title = if (isBn) cat.nameBn else cat.nameEn,
-                            emoji = cat.emoji,
-                            selected = activeCategory == cat.id,
-                            color = Color(cat.colorHex),
-                            onClick = { onCategorySelect(cat.id) }
-                        )
-                    }
-                }
-            }
-
-            // Offers Section If showing all, or selected is offer related
-            val filteredProducts = products.filter { prod ->
-                val matchesCat = activeCategory == null || prod.categoryId == activeCategory
-                val matchesSearch = searchQuery.isEmpty() ||
-                        prod.nameEn.lowercase().contains(searchQuery.lowercase()) ||
-                        prod.nameBn.contains(searchQuery) ||
-                        prod.descriptionEn.lowercase().contains(searchQuery.lowercase()) ||
-                        prod.descriptionBn.contains(searchQuery)
-                matchesCat && matchesSearch
-            }
-
-            if (activeCategory == null && searchQuery.isEmpty()) {
-                // Flash offers row
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
+            AnimatedVisibility(
+                visible = triggerLogoAnimation,
+                enter = fadeIn(tween(1000)) + expandVertically(tween(1000)),
+                label = "LogoAnimation"
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = Trans.t("offers", isBn),
-                        fontSize = 16.sp,
+                        text = "CHAMPIONSHIP 2D ARENA",
+                        color = Color(0xFFFFCC00),
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BkashPink
+                        style = TextStyle(letterSpacing = 4.sp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(end = 10.dp)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.scale(titleScale)
                     ) {
-                        val discountItems = products.filter { it.oldPrice > it.currentPrice }
-                        items(discountItems) { item ->
-                            OfferItemCard(
-                                product = item,
-                                isBn = isBn,
-                                onClick = { onProductSelect(item) },
-                                onAddToCart = { onAddToCart(item) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Main Product Grid Label
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                val titleLabel = if (activeCategory != null) {
-                    val found = MarketDetails.categories.find { it.id == activeCategory }
-                    if (isBn) found?.nameBn ?: "" else found?.nameEn ?: ""
-                } else {
-                    Trans.t("popular_products", isBn)
-                }
-                Text(
-                    text = "$titleLabel (${filteredProducts.size})",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
-            items(filteredProducts.chunked(2)) { pair ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 5.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        ProductGridItem(
-                            product = pair[0],
-                            isBn = isBn,
-                            onClick = { onProductSelect(pair[0]) },
-                            onAddToCart = { onAddToCart(pair[0]) },
-                            onBuyNow = { onBuyNow(pair[0]) }
-                        )
-                    }
-
-                    if (pair.size > 1) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            ProductGridItem(
-                                product = pair[1],
-                                isBn = isBn,
-                                onClick = { onProductSelect(pair[1]) },
-                                onAddToCart = { onAddToCart(pair[1]) },
-                                onBuyNow = { onBuyNow(pair[1]) }
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-
-            if (filteredProducts.isEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 40.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("🥬", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = if (isBn) "কোনো পণ্য পাওয়া যায়নি!" else "No products matching your search!",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            text = "ALAMGIR",
+                            color = Color(0xFFEF4444), // Vibrant Red
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(letterSpacing = 2.sp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "VS",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            style = TextStyle(fontStyle = FontStyle.Italic)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "KHORSHED",
+                            color = Color(0xFF3B82F6), // Cool Blue
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(letterSpacing = 2.sp)
                         )
                     }
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+            Spacer(modifier = Modifier.height(40.dp))
+
+            // Pulse glowing tap-to-start
+            val pulseAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800, easing = EaseInOutSine),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "PulseText"
+            )
+
+            Text(
+                text = "-- TAP TO FIGHT or PRESS SPACE --",
+                color = Color.White.copy(alpha = pulseAlpha),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                style = TextStyle(letterSpacing = 2.sp)
+            )
+
+            Spacer(modifier = Modifier.height(80.dp))
+
+            Text(
+                text = "Offine Retro Fighting Experience",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
 
-// Banner Promo Element
+// ================= 2. MAIN MENU SCREEN =================
+
 @Composable
-fun BannerPromoCard(isBn: Boolean) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
+fun GameMainMenuScreen(
+    store: LocalGameStore,
+    onStartSolo: () -> Unit,
+    onStartVersus: () -> Unit,
+    onExit: () -> Unit
+) {
+    val context = LocalContext.current
+    var totalWins by remember { mutableStateOf(store.getWins()) }
+    var totalMatches by remember { mutableStateOf(store.getMatchesPlayed()) }
+    var bgmVol by remember { mutableStateOf(store.getBgmVolume()) }
+    var sfxVol by remember { mutableStateOf(store.getSfxVolume()) }
+    var hardcoreAi by remember { mutableStateOf(store.isAiDifficult()) }
+
+    var showStatsDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(115.dp),
-        elevation = CardDefaults.cardElevation(3.dp)
+            .fillMaxSize()
+            .background(Color(0xFF090D1A)) // Dark space theme
     ) {
-        Box(
+        // Glowing abstract background circles
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFEF4444).copy(0.12f), Color.Transparent),
+                    radius = 350f
+                ),
+                center = Offset(200f, 200f)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF3B82F6).copy(0.12f), Color.Transparent),
+                    radius = 400f
+                ),
+                center = Offset(size.width - 200f, size.height - 200f)
+            )
+        }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(FreshGreen, SoftGreen)
-                    )
-                )
-                .padding(14.dp)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
+            // Header Section
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Box(
-                        modifier = Modifier
-                            .background(BkashPink, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (isBn) "ভাউচার কুপন: FRESH10" else "Promo: FRESH10",
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isBn) "আজকের তাজা দেশী বাজার" else "Fresh Local Bazaar Delivered",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = if (isBn) "১০% প্রথম অর্ডারে কুপন ডিসকাউন্ট" else "10% Super Discount on Home grocery",
-                        color = Color.White.copy(alpha = 0.9f) ,
-                        fontSize = 11.sp
-                    )
-                }
-                Text("🚜🥦", fontSize = 54.sp)
-            }
-        }
-    }
-}
-
-// Horizontal scroll Badges
-@Composable
-fun CategoryBadge(
-    title: String,
-    emoji: String,
-    selected: Boolean,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) color else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (selected) color else MaterialTheme.colorScheme.onSurface.copy(0.15f)),
-        tonalElevation = if (selected) 4.dp else 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(emoji, fontSize = 16.sp)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
-
-// Horizontal Flash Offer Cards
-@Composable
-fun OfferItemCard(
-    product: Product,
-    isBn: Boolean,
-    onClick: () -> Unit,
-    onAddToCart: () -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .width(135.dp)
-            .clickable { onClick() },
-        border = BorderStroke(1.dp, BkashPink.copy(0.3f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(70.dp)
-                    .background(LightGreenBg.copy(0.4f), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(product.emoji, fontSize = 38.sp)
-                // Percent OFF
-                val percentage = (((product.oldPrice - product.currentPrice) / product.oldPrice) * 100).toInt()
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .background(BkashPink, RoundedCornerShape(bottomEnd = 12.dp, topStart = 8.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text("$percentage% ${if (isBn) "ছাড়" else "OFF"}", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (isBn) product.nameBn else product.nameEn,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Row(verticalAlignment = Alignment.Bottom) {
+                // Game high score / statistics bar
                 Text(
-                    text = "${Trans.t("price_symbol", isBn)} ${product.currentPrice.toInt()}",
+                    text = "WIN RATE: ${if (totalMatches > 0) ((totalWins.toFloat() / totalMatches) * 100).toInt() else 0}%",
+                    color = Color(0xFFFFCC00),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .border(1.dp, Color(0xFFFFCC00).copy(0.4f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+
+                Text(
+                    text = "BATTLE RECORD: ${totalWins}W - ${max(0, totalMatches - totalWins)}L",
+                    color = Color.LightGray,
                     fontSize = 12.sp,
-                    color = FreshGreen,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.width(3.dp))
+            }
+
+            // Game Logo / Title
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "${product.oldPrice.toInt()}",
-                    fontSize = 10.sp,
-                    color = Color.Gray,
-                    textDecoration = TextDecoration.LineThrough
+                    text = "ALAMGIR VS KHORSHED",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    style = TextStyle(letterSpacing = 1.sp)
                 )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Button(
-                onClick = onAddToCart,
-                colors = ButtonDefaults.buttonColors(containerColor = BkashPink),
-                contentPadding = PaddingValues(horizontal = 6.dp),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(26.dp)
-            ) {
-                Text(Trans.t("add_to_cart", isBn), fontSize = 10.sp, color = Color.White)
-            }
-        }
-    }
-}
-
-// Grid layout matching real platform
-@Composable
-fun ProductGridItem(
-    product: Product,
-    isBn: Boolean,
-    onClick: () -> Unit,
-    onAddToCart: () -> Unit,
-    onBuyNow: () -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            // Visual element
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(95.dp)
-                    .background(LightGreenBg.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(product.emoji, fontSize = 48.sp)
-                if (product.isBestSeller) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .background(NagadOrange, RoundedCornerShape(bottomStart = 8.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (isBn) "সেরা বিক্রয়" else "Best Choice",
-                            color = Color.White,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Rating Stars
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Star, contentDescription = "Rating", tint = NagadOrange, modifier = Modifier.size(11.dp))
-                Text(product.rating.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 2.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                val isLow = product.stock <= 5
                 Text(
-                    text = if (isLow) "${product.stock}${Trans.t("stock_left", isBn)}" else Trans.t("in_stock", isBn),
-                    fontSize = 9.sp,
-                    color = if (isLow) BkashPink else FreshGreen,
-                    fontWeight = FontWeight.Bold
+                    text = "THE MINI FIGHTING CHAMPIONSHIP",
+                    color = Color(0xFFFF6600),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(letterSpacing = 3.sp),
+                    textAlign = TextAlign.Center
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = if (isBn) product.nameBn else product.nameEn,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = if (isBn) product.descriptionBn else product.descriptionEn,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 13.sp,
-                modifier = Modifier.height(26.dp)
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            LogisticalPriceRow(product = product, isBn = isBn)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Dual Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // Interactive game choices
+            Column(
+                modifier = Modifier
+                    .width(320.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedButton(
-                    onClick = onAddToCart,
+                Button(
+                    onClick = onStartSolo,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, FreshGreen),
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(30.dp)
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
-                    Text(Trans.t("add_to_cart", isBn), fontSize = 10.sp, color = FreshGreen, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Solo Play", tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("SOLO FIGHT (VS AI)", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
-                    onClick = onBuyNow,
+                    onClick = onStartVersus,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(30.dp)
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
-                    Text(Trans.t("buy_now", isBn), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Share, contentDescription = "Versus mode", tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("LOCAL VS (2 PLAYERS)", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { showSettingsDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(46.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("OPTION", fontSize = 13.sp)
+                    }
+
+                    Button(
+                        onClick = { showStatsDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(46.dp)
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = "Stats", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("STATS", fontSize = 13.sp)
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onExit,
+                    border = BorderStroke(1.dp, Color.Gray.copy(0.6f)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) {
+                    Text("EXIT GAME", color = Color.LightGray, fontSize = 12.sp)
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun LogisticalPriceRow(product: Product, isBn: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(verticalAlignment = Alignment.Bottom) {
+            // Developer Credit
             Text(
-                text = "${Trans.t("price_symbol", isBn)} ${product.currentPrice.toInt()}",
-                fontSize = 14.sp,
-                color = FreshGreen,
-                fontWeight = FontWeight.ExtraBold
+                text = "Powered by Jetpack Compose Engine v1.1.0",
+                color = Color.Gray.copy(alpha = 0.5f),
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-            if (product.oldPrice > product.currentPrice) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "${product.oldPrice.toInt()}",
-                    fontSize = 11.sp,
-                    color = Color.Gray,
-                    textDecoration = TextDecoration.LineThrough
-                )
-            }
+        }
+
+        // --- Option Settings Dialog ---
+        if (showSettingsDialog) {
+            AlertDialog(
+                onDismissRequest = { showSettingsDialog = false },
+                title = { Text("GAME OPTIONS", fontWeight = FontWeight.Bold, color = Color.White) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("BGM MUSIC VOLUME", fontSize = 12.sp, color = Color.White)
+                                Text("${(bgmVol * 100).toInt()}%", fontSize = 12.sp, color = Color.White)
+                            }
+                            Slider(
+                                value = bgmVol,
+                                onValueChange = {
+                                    bgmVol = it
+                                    store.setBgmVolume(it)
+                                    SoundSynthesizer.setBgmVolume(it)
+                                },
+                                valueRange = 0f..1f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFF3B82F6),
+                                    activeTrackColor = Color(0xFF3B82F6)
+                                )
+                            )
+                        }
+
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("SOUND SFX VOLUME", fontSize = 12.sp, color = Color.White)
+                                Text("${(sfxVol * 100).toInt()}%", fontSize = 12.sp, color = Color.White)
+                            }
+                            Slider(
+                                value = sfxVol,
+                                onValueChange = {
+                                    sfxVol = it
+                                    store.setSfxVolume(it)
+                                    SoundSynthesizer.setSfxVolume(it)
+                                },
+                                valueRange = 0f..1f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFEF4444),
+                                    activeTrackColor = Color(0xFFEF4444)
+                                )
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("HARDCORE ENEMY AI", fontSize = 12.sp, color = Color.White)
+                                Text(
+                                    if (hardcoreAi) "Aggressive Opponent Combatant" else "Easy Combat Dummy Mode",
+                                    fontSize = 10.sp,
+                                    color = Color.LightGray
+                                )
+                            }
+                            Switch(
+                                checked = hardcoreAi,
+                                onCheckedChange = {
+                                    hardcoreAi = it
+                                    store.setAiDifficult(it)
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSettingsDialog = false }) {
+                        Text("SAVE CHANGES", color = Color(0xFFFFCC00))
+                    }
+                },
+                containerColor = Color(0xFF1E293B),
+                textContentColor = Color.White
+            )
+        }
+
+        // --- Statistics Dialog ---
+        if (showStatsDialog) {
+            AlertDialog(
+                onDismissRequest = { showStatsDialog = false },
+                title = { Text("FIGHT CHAMP RECORD", fontWeight = FontWeight.Bold, color = Color.White) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Matches:", color = Color.LightGray, fontSize = 13.sp)
+                            Text("$totalMatches", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Wins:", color = Color.LightGray, fontSize = 13.sp)
+                            Text("$totalWins", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Defeats:", color = Color.LightGray, fontSize = 13.sp)
+                            Text("${max(0, totalMatches - totalWins)}", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Unlocked Arenas:", color = Color.LightGray, fontSize = 13.sp)
+                            Text("3/3 Open", color = Color(0xFFFFCC00), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "To achieve better rank score, increase AI difficulties and train hard sweeps & blocks combos!",
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                },
+                confirmButton = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = {
+                            // Reset statistics safely
+                            store.setHighScore(0)
+                            totalWins = 0
+                            totalMatches = 0
+                            // Edit high scores directly
+                            val rawPrefs = context.getSharedPreferences("AlamgirVsKhorshedPrefs", Context.MODE_PRIVATE)
+                            rawPrefs.edit().putInt("total_wins", 0).putInt("matches_played", 0).apply()
+                            Toast.makeText(context, "Battle logs cleared!", Toast.LENGTH_SHORT).show()
+                            showStatsDialog = false
+                        }) {
+                            Text("RESET STATS", color = Color.Gray)
+                        }
+
+                        TextButton(onClick = { showStatsDialog = false }) {
+                            Text("CLOSE", color = Color(0xFFEF4444))
+                        }
+                    }
+                },
+                containerColor = Color(0xFF1E293B),
+                textContentColor = Color.White
+            )
         }
     }
 }
 
-// ================= CART SCREEN =================
+// ================= 3. CHARACTER SELECTION SCREEN =================
+
 @Composable
-fun CartScreen(
-    isBn: Boolean,
-    cartList: List<CartItem>,
-    products: List<Product>,
-    couponApplied: Boolean,
-    couponCode: String,
-    onCouponValueChange: (String) -> Unit,
-    onApplyCoupon: () -> Unit,
-    onQuantityChange: (String, Int) -> Unit,
-    onCheckoutClick: () -> Unit,
-    onGoShop: () -> Unit
+fun CharacterSelectionScreen(
+    userSelectedAlamgir: Boolean,
+    onSelectChar: (Boolean) -> Unit,
+    arena: BattleArena,
+    onSelectArena: (BattleArena) -> Unit,
+    singlePlayer: Boolean,
+    onBack: () -> Unit,
+    onLaunchMatch: () -> Unit
 ) {
-    if (cartList.isEmpty()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F172A))
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp),
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("🛒", fontSize = 72.sp)
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = Trans.t("empty_cart", isBn),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            Button(
-                onClick = onGoShop,
-                colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text(if (isBn) "চলুন বাজার করি" else "Go Shopping", color = Color.White)
-            }
-        }
-    } else {
-        val mappedItems = cartList.mapNotNull { cartItem ->
-            val p = products.find { it.id == cartItem.productId }
-            if (p != null) cartItem to p else null
-        }
-
-        val subtotal = mappedItems.sumOf { (cartItem, prod) -> prod.currentPrice * cartItem.quantity }
-        val discount = if (couponApplied) subtotal * 0.1 else 0.0
-        val total = subtotal - discount + 40.0 // 40 Taka Delivery fee
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = Trans.t("cart_title", isBn) + " (${cartList.size})",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(14.dp)
-            )
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 14.dp)
-            ) {
-                items(mappedItems) { (cartItem, prod) ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(10.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .background(LightGreenBg.copy(0.4f), RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(prod.emoji, fontSize = 28.sp)
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isBn) prod.nameBn else prod.nameEn,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "${Trans.t("price_symbol", isBn)} ${prod.currentPrice.toInt()}",
-                                    fontSize = 12.sp,
-                                    color = FreshGreen,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Quantity selectors
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .border(1.dp, Color.Gray.copy(0.3f), RoundedCornerShape(16.dp))
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { onQuantityChange(prod.id, cartItem.quantity - 1) },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = FreshGreen)
-                                }
-                                Text(
-                                    text = cartItem.quantity.toString(),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                )
-                                IconButton(
-                                    onClick = { onQuantityChange(prod.id, cartItem.quantity + 1) },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = FreshGreen)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Coupon implementation section
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = Trans.t("coupon_code", isBn),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedTextField(
-                                    value = couponCode,
-                                    onValueChange = onCouponValueChange,
-                                    placeholder = { Text("e.g. FRESH10", fontSize = 12.sp) },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(
-                                    onClick = onApplyCoupon,
-                                    colors = ButtonDefaults.buttonColors(containerColor = NagadOrange),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(44.dp)
-                                ) {
-                                    Text(if (isBn) "প্রয়োগ" else "Apply", color = Color.White)
-                                }
-                            }
-                            if (couponApplied) {
-                                Text(
-                                    text = "✓ FRESH10 (10% OFF) Applied",
-                                    color = FreshGreen,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Price totalizations
-                item {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp)
-                    ) {
-                        PriceLine(Trans.t("subtotal", isBn), subtotal, isBn)
-                        if (discount > 0) {
-                            PriceLine(if (isBn) "১০% কুপন ডিসকাউন্ট" else "10% Coupon Discount", -discount, isBn, labelColor = BkashPink)
-                        }
-                        PriceLine(Trans.t("delivery_charge", isBn), 40.0, isBn)
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(Trans.t("total", isBn), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                            Text(
-                                text = "${Trans.t("price_symbol", isBn)} ${total.toInt()}",
-                                fontSize = 18.sp,
-                                color = FreshGreen,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
-                }
+            // Screen Title
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "SELECT FIGHTER & ARENA",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(letterSpacing = 2.sp)
+                )
+                Text(
+                    text = if (singlePlayer) "Solo mode: Vs Computer AI" else "Local mode: 2 Player split controls",
+                    color = Color.LightGray,
+                    fontSize = 11.sp
+                )
             }
 
-            // Action Button
-            Button(
-                onClick = onCheckoutClick,
-                colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                shape = RoundedCornerShape(24.dp),
+            // Main layout: Character Select Cards Side by Side
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp)
-                    .height(50.dp)
+                    .weight(1f)
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(Trans.t("checkout_btn", isBn), fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                // Character 1: Alamgir
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onSelectChar(true) }
+                        .border(
+                            2.dp,
+                            if (userSelectedAlamgir) Color(0xFFEF4444) else Color.Transparent,
+                            RoundedCornerShape(12.dp)
+                        ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (userSelectedAlamgir) Color(0xFF1E293B) else Color(0xFF0F172A).copy(0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Fighter Face Avatar Placeholder drawn neatly
+                        Canvas(modifier = Modifier.size(100.dp)) {
+                            // Head & Face
+                            drawCircle(Color(0xFFFBC02D), radius = 35f)
+                            // Hair style: Slick short black hair
+                            val hairPath = Path().apply {
+                                moveTo(size.width / 2 - 40f, size.height / 2 - 25f)
+                                lineTo(size.width / 2 + 40f, size.height / 2 - 25f)
+                                lineTo(size.width / 2 + 25f, size.height / 2 - 45f)
+                                lineTo(size.width / 2 - 25f, size.height / 2 - 45f)
+                                close()
+                            }
+                            drawPath(hairPath, Color(0xFF1E293B))
+
+                            // Eyes (aggressive red shade/sunglasses)
+                            drawCircle(Color.Black, radius = 5f, center = Offset(size.width / 2 - 12f, size.height / 2 - 5f))
+                            drawCircle(Color.Black, radius = 5f, center = Offset(size.width / 2 + 12f, size.height / 2 - 5f))
+                            // Red Fighting Jacket representation
+                            drawRect(
+                                Color(0xFFEF4444),
+                                topLeft = Offset(size.width / 2 - 30f, size.height / 2 + 20f),
+                                size = Size(60f, 40f)
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Alamgir Hossain", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                            Text("Aggressive Combat Style", color = Color(0xFFEF4444), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Stats description
+                            CharacterStatBar("POWER", 0.9f, Color(0xFFEF4444))
+                            CharacterStatBar("SPEED", 0.65f, Color(0xFFFFCC00))
+                            CharacterStatBar("DEFENSE", 0.75f, Color(0xFF10B981))
+                        }
+                    }
+                }
+
+                // Character 2: Khorshed
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onSelectChar(false) }
+                        .border(
+                            2.dp,
+                            if (!userSelectedAlamgir) Color(0xFF3B82F6) else Color.Transparent,
+                            RoundedCornerShape(12.dp)
+                        ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (!userSelectedAlamgir) Color(0xFF1E293B) else Color(0xFF0F172A).copy(0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Fighter face Avatar
+                        Canvas(modifier = Modifier.size(100.dp)) {
+                            drawCircle(Color(0xFFFFD54F), radius = 35f)
+                            // Blue combat hoodie drawn neatly
+                            drawCircle(Color(0xFF3B82F6), radius = 38f, style = Stroke(width = 8f))
+                            drawCircle(Color.White, radius = 4f, center = Offset(size.width / 2 - 12f, size.height / 2 - 5f))
+                            drawCircle(Color.White, radius = 4f, center = Offset(size.width / 2 + 12f, size.height / 2 - 5f))
+                            // Cute fast look and blue chest base
+                            drawRect(Color(0xFF3B82F6), topLeft = Offset(size.width / 2 - 30f, size.height / 2 + 20f), size = Size(60f, 40f))
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Khorshed Alam", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                            Text("Fast Combo Fighting Style", color = Color(0xFF3B82F6), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Stats description
+                            CharacterStatBar("POWER", 0.7f, Color(0xFFEF4444))
+                            CharacterStatBar("SPEED", 0.95f, Color(0xFFFFCC00))
+                            CharacterStatBar("DEFENSE", 0.6f, Color(0xFF10B981))
+                        }
+                    }
+                }
+            }
+
+            // Arena Selection Area
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E293B), RoundedCornerShape(8.dp))
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("CHOOSE BATTLEFIELD ARENA", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BattleArena.values().forEach { ar ->
+                        val selected = ar == arena
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onSelectArena(ar) }
+                                .background(
+                                    if (selected) Color(0xFFFF6600) else Color(0xFF0F172A),
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(vertical = 10.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = ar.displayName,
+                                color = if (selected) Color.White else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onBack,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(48.dp)
+                ) {
+                    Text("BACK TO MENU", color = Color.LightGray)
+                }
+
+                Button(
+                    onClick = {
+                        SoundSynthesizer.playSfx("special")
+                        onLaunchMatch()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6600)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(48.dp)
+                ) {
+                    Text("ENGAGE MATCH!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
             }
         }
     }
 }
 
 @Composable
-fun PriceLine(label: String, valRaw: Double, isBn: Boolean, labelColor: Color = Color.Unspecified) {
+fun CharacterStatBar(label: String, progress: Float, color: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 12.sp, color = if (labelColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface.copy(0.7f) else labelColor)
-        val sign = if (valRaw < 0) "- " else ""
         Text(
-            text = "$sign${Trans.t("price_symbol", isBn)} ${Math.abs(valRaw).toInt()}",
-            fontSize = 12.sp,
-            color = if (valRaw < 0) BkashPink else MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold
+            text = label,
+            color = Color.LightGray,
+            fontSize = 9.sp,
+            modifier = Modifier.width(55.dp),
+            fontWeight = FontWeight.Bold
+        )
+        LinearProgressIndicator(
+            progress = progress,
+            color = color,
+            trackColor = Color.Gray.copy(0.2f),
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
         )
     }
 }
 
-// ================= CHECKOUT SCREEN =================
+// ================= 4. REAL-TIME OFF-LINE FIGHTING BATTLE ARENA =================
+
 @Composable
-fun CheckoutScreen(
-    isBn: Boolean,
-    cartList: List<CartItem>,
-    products: List<Product>,
-    couponApplied: Boolean,
-    user: User,
-    onOrderPlaced: (Order) -> Unit,
-    onBack: () -> Unit
+fun FightingBattleArenaScreen(
+    player1IsAlamgir: Boolean,
+    arena: BattleArena,
+    isSolo: Boolean,
+    store: LocalGameStore,
+    onMatchOver: (winnerName: String, summary: String) -> Unit,
+    onQuit: () -> Unit
 ) {
-    var name by remember { mutableStateOf(user.name.ifEmpty { "Aiman Chowdhury" }) }
-    var phone by remember { mutableStateOf(user.phone.ifEmpty { "01867164726" }) }
-    var address by remember { mutableStateOf(user.address.ifEmpty { if (isBn) "পতেঙ্গা সমুদ্র সৈকত এলাকা, চট্টগ্রাম" else "Patenga Beach Road, Chattogram" }) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-    // COD vs Digital Payment Settings
-    var selectedPaymentType by remember { mutableStateOf("COD") } // COD, bKash, Nagad
-    var transactionIdInput by remember { mutableStateOf("") }
-    var inputError by remember { mutableStateOf<String?>(null) }
-
-    val mappedItems = cartList.mapNotNull { cartItem ->
-        val p = products.find { it.id == cartItem.productId }
-        if (p != null) cartItem to p else null
+    // 1. Instantiating our two custom fighter objects using the selection parameters
+    val p1 = remember {
+        FighterCharacter(
+            id = 1,
+            name = if (player1IsAlamgir) "Alamgir" else "Khorshed",
+            isAlamgir = player1IsAlamgir,
+            colorAccent = if (player1IsAlamgir) Color(0xFFEF4444) else Color(0xFF3B82F6)
+        )
     }
-    val subtotal = mappedItems.sumOf { (cartItem, prod) -> prod.currentPrice * cartItem.quantity }
-    val discount = if (couponApplied) subtotal * 0.1 else 0.0
-    val total = subtotal - discount + 40.0 // 40 Tk delivery fee
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 14.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        // Custom Back Navigation Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = FreshGreen)
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = Trans.t("checkout_title", isBn),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = FreshGreen
-            )
-        }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(if (isBn) "১. গ্রাহকের ডেলিভারি তথ্য" else "1. Delivery Information", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(6.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(Trans.t("name", isBn)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text(Trans.t("phone", isBn)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = address,
-                onValueChange = { address = it },
-                label = { Text(Trans.t("address", isBn)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                maxLines = 2
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(if (isBn) "২. পেমেন্ট মাধ্যম নির্ধারণ" else "2. Select Payment Method", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // COD Option Card
-            PaymentOptionRow(
-                title = Trans.t("cod", isBn),
-                logoText = "💵",
-                selected = selectedPaymentType == "COD",
-                color = FreshGreen,
-                onClick = { selectedPaymentType = "COD" }
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // bKash Option Card
-            PaymentOptionRow(
-                title = Trans.t("bkash", isBn),
-                logoText = "bKash",
-                selected = selectedPaymentType == "bKash",
-                color = BkashPink,
-                onClick = { selectedPaymentType = "bKash" }
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Nagad Option Card
-            PaymentOptionRow(
-                title = Trans.t("nagad", isBn),
-                logoText = "Nagad",
-                selected = selectedPaymentType == "Nagad",
-                color = NagadOrange,
-                onClick = { selectedPaymentType = "Nagad" }
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Interactive Sender Subforms
-            if (selectedPaymentType == "bKash" || selectedPaymentType == "Nagad") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (selectedPaymentType == "bKash") BkashPink.copy(0.06f) else NagadOrange.copy(0.06f)
-                    ),
-                    border = BorderStroke(1.dp, if (selectedPaymentType == "bKash") BkashPink.copy(0.3f) else NagadOrange.copy(0.3f))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = if (selectedPaymentType == "bKash") Trans.t("inst_bkash", isBn) else Trans.t("inst_nagad", isBn),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        if (selectedPaymentType == "bKash") BkashPink else NagadOrange,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 3.dp)
-                            ) {
-                                Text("০১৮৬৭১৬৪৭২৬", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                if (isBn) "(টাকা পাঠানোর নাম্বার)" else "(Payment Send-Money No.)",
-                                fontSize = 10.sp,
-                                color = Color.Gray
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = transactionIdInput,
-                            onValueChange = { transactionIdInput = it },
-                            placeholder = { Text(Trans.t("trx_hint", isBn), fontSize = 12.sp) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                            )
-                        )
-                    }
-                }
-            }
-
-            inputError?.let {
-                Text(
-                    text = it,
-                    color = BkashPink,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Cost Recap inside Button Area
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(if (isBn) "পরিশোধযোগ্য মোট মূল্য" else "Total Payable Amount", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Text(
-                    text = "${Trans.t("price_symbol", isBn)} ${total.toInt()}",
-                    fontSize = 17.sp,
-                    color = FreshGreen,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Button(
-                onClick = {
-                    if (name.isEmpty() || phone.isEmpty() || address.isEmpty()) {
-                        inputError = if (isBn) "অনুগ্রহ করে সব তথ্য দিন!" else "Please fill up all delivery parameters!"
-                        return@Button
-                    }
-                    if ((selectedPaymentType == "bKash" || selectedPaymentType == "Nagad") && transactionIdInput.trim().isEmpty()) {
-                        inputError = if (isBn) "অনুগ্রহ করে Transaction ID বসান!" else "Transaction ID cannot be blank!"
-                        return@Button
-                    }
-
-                    inputError = null
-                    val dateStr = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date())
-                    val order = Order(
-                        id = "REF" + (10000 + Random().nextInt(90000)),
-                        customerName = name,
-                        phoneNumber = phone,
-                        deliveryAddress = address,
-                        paymentMethod = selectedPaymentType,
-                        transactionId = if (selectedPaymentType == "COD") "CASH_ON_DELIVERY" else transactionIdInput.uppercase().trim(),
-                        items = cartList,
-                        totalPrice = total,
-                        status = "Pending",
-                        timestamp = dateStr,
-                        trackingStep = 1
-                    )
-                    onOrderPlaced(order)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            ) {
-                Text(Trans.t("order_confirm", isBn), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(30.dp))
-        }
-}
-
-@Composable
-fun PaymentOptionRow(
-    title: String,
-    logoText: String,
-    selected: Boolean,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.5.dp, if (selected) color else Color.Gray.copy(0.2f)),
-        color = if (selected) color.copy(0.04f) else MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(
-                selected = selected,
-                onClick = onClick,
-                colors = RadioButtonDefaults.colors(selectedColor = color)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .background(color, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-            ) {
-                Text(logoText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    val p2 = remember {
+        FighterCharacter(
+            id = 2,
+            name = if (!player1IsAlamgir) "Alamgir" else "Khorshed",
+            isAlamgir = !player1IsAlamgir,
+            colorAccent = if (!player1IsAlamgir) Color(0xFFEF4444) else Color(0xFF3B82F6)
+        ).apply {
+            isAIControlled = isSolo
         }
     }
-}
 
-// ================= TRACKING SCREEN =================
-@Composable
-fun TrackingScreen(
-    isBn: Boolean,
-    orders: List<Order>,
-    products: List<Product>,
-    onGoShopping: () -> Unit
-) {
-    if (orders.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("🚚", fontSize = 72.sp)
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = if (isBn) "কোনো একটিভ অর্ডার নেই!" else "No orders placed yet!",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            Button(
-                onClick = onGoShopping,
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FreshGreen)
-            ) {
-                Text(if (isBn) "কাঁচা বাজার দেখুন" else "Explore Fresh Items", color = Color.White)
-            }
-        }
-    } else {
-        // Track the first active order
-        val order = orders.first()
+    // Game loop parameters
+    var matchTimeLeft by remember { mutableStateOf(90) }
+    var matchActive by remember { mutableStateOf(false) }
+    var pauseState by remember { mutableStateOf(false) }
+    var introCountdown by remember { mutableStateOf(3) }
+    var introFinished by remember { mutableStateOf(false) }
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp)
-        ) {
-            item {
-                Text(
-                    text = Trans.t("track_order", isBn),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 14.dp)
+    // Screen Shake state triggers
+    var screenShakeOffset by remember { mutableStateOf(Offset(0f, 0f)) }
+    var shakeDurationTicks by remember { mutableStateOf(0) }
+    var isSlowMotionFinisher by remember { mutableStateOf(false) }
+
+    // Projectiles and Particle Lists
+    val activeProjectiles = remember { mutableStateListOf<PowerProjectile>() }
+    val activeParticles = remember { mutableStateListOf<FighterParticle>() }
+
+    // Custom Focus Request to read PC key press events immediately
+    val focusRequester = remember { FocusRequester() }
+
+    // Hit-Combo UI Notices
+    var showComboText by remember { mutableStateOf("") }
+    var comboNoticeOpacity by remember { mutableStateOf(0f) }
+
+    // Log tracking for final screen
+    var player1Hits by remember { mutableIntStateOf(0) }
+    var player2Hits by remember { mutableIntStateOf(0) }
+    var p1MaxCombo by remember { mutableIntStateOf(0) }
+
+    fun triggerScreenShake(ticks: Int) {
+        shakeDurationTicks = ticks
+    }
+
+    fun triggerHitEffect(hitX: Float, hitY: Float, isElectric: Boolean) {
+        val color = if (isElectric) Color(0xFF00E5FF) else Color(0xFFFF5722)
+        // Spawn particles
+        for (i in 0..12) {
+            val vx = (Math.random() * 16 - 8).toFloat()
+            val vy = (Math.random() * 16 - 8).toFloat()
+            activeParticles.add(
+                FighterParticle(
+                    x = hitX,
+                    y = hitY,
+                    vx = vx,
+                    vy = vy,
+                    color = color,
+                    size = (6..12).random().toFloat(),
+                    maxLife = 20,
+                    life = 20,
+                    isElectric = isElectric,
+                    isFire = !isElectric
                 )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    "${Trans.t("order_id", isBn)}: #${order.id}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = FreshGreen
-                                )
-                                Text(order.timestamp, fontSize = 11.sp, color = Color.Gray)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        when (order.trackingStep) {
-                                            4 -> FreshGreen
-                                            else -> NagadOrange
-                                        }, RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                val statusText = when (order.trackingStep) {
-                                    1 -> Trans.t("status_pending", isBn)
-                                    2 -> Trans.t("status_packing", isBn)
-                                    3 -> Trans.t("status_shipped", isBn)
-                                    4 -> Trans.t("status_delivered", isBn)
-                                    else -> order.status
-                                }
-                                Text(statusText, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Divider(modifier = Modifier.padding(vertical = 10.dp))
-
-                        Text(
-                            text = if (isBn) "২ কেজি আলু, ১ কেজি রুই মাছ..." else "Order contains:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
-                        )
-
-                        order.items.forEach { item ->
-                            val p = products.find { it.id == item.productId }
-                            p?.let {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("• ${if (isBn) it.nameBn else it.nameEn} x ${item.quantity}", fontSize = 12.sp)
-                                    Text("${Trans.t("price_symbol", isBn)} ${(it.currentPrice * item.quantity).toInt()}", fontSize = 12.sp)
-                                }
-                            }
-                        }
-
-                        Divider(modifier = Modifier.padding(vertical = 10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(if (isBn) "পরিশোধের মাধ্যম:" else "Payment Method:", fontSize = 12.sp, color = Color.Gray)
-                            Text(order.paymentMethod, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(if (isBn) "মোট টাকা:" else "Total Paid:", fontSize = 12.sp, color = Color.Gray)
-                            Text("${Trans.t("price_symbol", isBn)} ${order.totalPrice.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = FreshGreen)
-                        }
-                    }
-                }
-            }
-
-            // Interactive Step Progress UI matching actual tracking app
-            val stepsData = listOf(
-                1 to ("status_pending" to "We are processing your bazaar bag."),
-                2 to ("status_packing" to "Our local helper is selecting fresh vegetables."),
-                3 to ("status_shipped" to "Rider is heading to your house."),
-                4 to ("status_delivered" to "Your organic items successfully arrived.")
             )
+        }
+    }
 
-            items(stepsData) { (step, textPair) ->
-                val (titleKey, subtext) = textPair
-                val activeOrCompleted = order.trackingStep >= step
+    fun playCombatSound(sound: String) {
+        SoundSynthesizer.playSfx(sound)
+    }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(if (activeOrCompleted) FreshGreen else Color.Gray.copy(0.2f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (order.trackingStep > step) {
-                                Icon(Icons.Default.Check, contentDescription = "Done", tint = Color.White, modifier = Modifier.size(14.dp))
-                            } else {
-                                Text(step.toString(), color = if (activeOrCompleted) Color.White else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        if (step < 4) {
-                            Box(
-                                modifier = Modifier
-                                    .width(2.dp)
-                                    .height(40.dp)
-                                    .background(if (order.trackingStep > step) FreshGreen else Color.Gray.copy(0.2f))
-                            )
-                        }
+    // Function to calculate attacks collisions
+    fun checkAttackHit(attacker: FighterCharacter, defender: FighterCharacter, isPunch: Boolean) {
+        // Distance constraints
+        val deltaX = abs(attacker.x - defender.x)
+        val validY = abs(attacker.y - defender.y) < 80f
+        val validFacing = if (attacker.facingRight) attacker.x < defender.x else attacker.x > defender.x
+
+        if (deltaX < 110f && validY && validFacing && defender.state != FighterState.KO) {
+            // Triggered Hit! Calculate Blocks defense
+            if (defender.state == FighterState.Block) {
+                // Reduced block damage
+                defender.health = max(0f, defender.health - 1.2f)
+                defender.energy = min(100f, defender.energy + 8f) // Blocking charges energy
+                triggerScreenShake(3)
+                triggerHitEffect(defender.x, defender.y - 60f, attacker.isAlamgir)
+                playCombatSound("block")
+            } else {
+                // Direct strike! Pushes back slightly, hurts, inflicts HIT state
+                val damage = if (isPunch) 7f else 10f
+                defender.health = max(0f, defender.health - damage)
+                defender.state = FighterState.Hit
+                defender.stateTimeLeft = 10 // Stunned for 10 ticks
+                // Pushes opponent in direction of strike
+                val recoilSign = if (attacker.facingRight) 1f else -1f
+                defender.vx = recoilSign * 18f
+                defender.vy = -6f // Tiny pop up feel
+
+                // Score metrics tracking
+                attacker.energy = min(100f, attacker.energy + 14f)
+                attacker.comboCount++
+                if (attacker.id == 1) {
+                    player1Hits++
+                    if (attacker.comboCount > p1MaxCombo) {
+                        p1MaxCombo = attacker.comboCount
                     }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column {
-                        Text(
-                            text = Trans.t(titleKey, isBn),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (activeOrCompleted) FreshGreen else Color.Gray
-                        )
-                        Text(
-                            text = if (isBn) "আপনার তাজা অর্ডারের পরবর্তী ধাপ পর্যালোচনা করা হচ্ছে।" else subtext,
-                            fontSize = 11.sp,
-                            color = if (activeOrCompleted) MaterialTheme.colorScheme.onBackground.copy(0.7f) else Color.Gray.copy(0.8f)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
+                } else {
+                    player2Hits++
                 }
+
+                if (attacker.comboCount >= 2) {
+                    showComboText = "${attacker.name}: ${attacker.comboCount}-HIT COMBO!"
+                    comboNoticeOpacity = 1f
+                }
+
+                triggerScreenShake(7)
+                triggerHitEffect(defender.x, defender.y - 60f, !attacker.isAlamgir)
+                playCombatSound("hit")
             }
         }
     }
-}
 
-// ================= ACCOUNT PROFILE =================
-@Composable
-fun AccountScreen(
-    isBn: Boolean,
-    user: User,
-    orders: List<Order>,
-    products: List<Product>,
-    onSaveUser: (User) -> Unit,
-    onLogout: () -> Unit
-) {
-    var nameInput by remember { mutableStateOf(user.name) }
-    var phoneInput by remember { mutableStateOf(user.phone) }
-    var addressInput by remember { mutableStateOf(user.address) }
+    // Projectile action firing
+    fun shootSpecialProjectile(attacker: FighterCharacter) {
+        if (attacker.energy >= 80f) {
+            attacker.energy = 0f
+            attacker.state = FighterState.Special
+            attacker.stateTimeLeft = 24
 
-    // Mock Login phone validation states
-    var phoneForLogin by remember { mutableStateOf("") }
-    var otpField by remember { mutableStateOf("") }
-    var loginStep by remember { mutableStateOf(1) } // 1 = Phone input, 2 = OTP check
+            val direction = if (attacker.facingRight) 1f else -1f
+            val projectileVx = direction * 24f
+            val isElectric = !attacker.isAlamgir
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(14.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        if (!user.isLoggedIn) {
-            // Logged out: Register flow
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = Trans.t("login", isBn),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FreshGreen
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = Trans.t("reg_title", isBn),
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
+            activeProjectiles.add(
+                PowerProjectile(
+                    x = attacker.x + (direction * 40f),
+                    y = attacker.y - 60f,
+                    vx = projectileVx,
+                    ownerId = attacker.id,
+                    isElectric = isElectric
+                )
+            )
+            playCombatSound("special")
+            triggerScreenShake(4)
+        }
+    }
 
-                    if (loginStep == 1) {
-                        OutlinedTextField(
-                            value = phoneForLogin,
-                            onValueChange = { phoneForLogin = it },
-                            label = { Text(Trans.t("phone", isBn)) },
-                            placeholder = { Text("01XXXXXXXXX") },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Button(
-                            onClick = {
-                                if (phoneForLogin.length >= 11) {
-                                    loginStep = 2
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (isBn) "ওটিপি (OTP) পাঠান" else "Send Verification Code", color = Color.White)
-                        }
-                    } else {
-                        Text(
-                            text = "${Trans.t("verify_phone", isBn)} (OTP) sent to $phoneForLogin",
-                            fontSize = 12.sp,
-                            color = FreshGreen,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = otpField,
-                            onValueChange = { otpField = it },
-                            label = { Text("OTP code (e.g., 1234)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Button(
-                            onClick = {
-                                onSaveUser(
-                                    User(
-                                        name = "Aiman Chowdhury",
-                                        phone = phoneForLogin,
-                                        address = if (isBn) "পতেঙ্গা সমুদ্র সৈকত এলাকা, চট্টগ্রাম" else "Patenga Beach Road, Chattogram",
-                                        isLoggedIn = true
-                                    )
-                                )
-                                loginStep = 1
-                                phoneForLogin = ""
-                                otpField = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(Trans.t("get_started", isBn), color = Color.White)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { loginStep = 1 }) {
-                            Text(if (isBn) "ভুল নাম্বার? পরিবর্তন করুন" else "Change Phone Number", color = Color.Gray)
-                        }
+    // Key event PC mapping
+    fun handlePCControls(key: Key, isDown: Boolean) {
+        if (pauseState || !matchActive) return
+
+        if (isDown) {
+            when (key) {
+                // Player 1 controls
+                Key.A -> {
+                    p1.vx = -12f
+                    p1.facingRight = false
+                    if (p1.y >= 400f) p1.state = FighterState.RunBackward
+                }
+                Key.D -> {
+                    p1.vx = 12f
+                    p1.facingRight = true
+                    if (p1.y >= 400f) p1.state = FighterState.RunForward
+                }
+                Key.W -> {
+                    if (p1.y >= 400f) {
+                        p1.vy = -24f
+                        p1.state = FighterState.Jump
+                        playCombatSound("punch")
                     }
+                }
+                Key.S -> {
+                    p1.state = FighterState.Block
+                    p1.isBlocking = true
+                }
+                Key.J -> {
+                    if (p1.stateTimeLeft == 0) {
+                        p1.state = FighterState.Punch
+                        p1.stateTimeLeft = 8
+                        playCombatSound("punch")
+                        checkAttackHit(p1, p2, isPunch = true)
+                    }
+                }
+                Key.K -> {
+                    if (p1.stateTimeLeft == 0) {
+                        p1.state = FighterState.Kick
+                        p1.stateTimeLeft = 10
+                        playCombatSound("kick")
+                        checkAttackHit(p1, p2, isPunch = false)
+                    }
+                }
+                Key.L -> {
+                    shootSpecialProjectile(p1)
+                }
+
+                // Player 2 controls (Alternative PC controls mapping inside versus)
+                Key.DirectionLeft -> {
+                    if (!isSolo) {
+                        p2.vx = -12f
+                        p2.facingRight = false
+                        if (p2.y >= 400f) p2.state = FighterState.RunForward
+                    }
+                }
+                Key.DirectionRight -> {
+                    if (!isSolo) {
+                        p2.vx = 12f
+                        p2.facingRight = true
+                        if (p2.y >= 400f) p2.state = FighterState.RunBackward
+                    }
+                }
+                Key.DirectionUp -> {
+                    if (!isSolo && p2.y >= 400f) {
+                        p2.vy = -24f
+                        p2.state = FighterState.Jump
+                        playCombatSound("punch")
+                    }
+                }
+                Key.NumPad4 -> {
+                    if (!isSolo && p2.stateTimeLeft == 0) {
+                        p2.state = FighterState.Punch
+                        p2.stateTimeLeft = 8
+                        playCombatSound("punch")
+                        checkAttackHit(p2, p1, isPunch = true)
+                    }
+                }
+                Key.NumPad5 -> {
+                    if (!isSolo && p2.stateTimeLeft == 0) {
+                        p2.state = FighterState.Kick
+                        p2.stateTimeLeft = 10
+                        playCombatSound("kick")
+                        checkAttackHit(p2, p1, isPunch = false)
+                    }
+                }
+                Key.NumPad6 -> {
+                    if (!isSolo) shootSpecialProjectile(p2)
                 }
             }
         } else {
-            // Logged in profile settings
-            Text(
-                text = if (isBn) "আপনার প্রোফাইল" else "User Account settings",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = FreshGreen
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            // Key released resets
+            when (key) {
+                Key.A, Key.D -> {
+                    if (p1.state == FighterState.RunForward || p1.state == FighterState.RunBackward) {
+                        p1.state = FighterState.Idle
+                    }
+                }
+                Key.S -> {
+                    if (p1.state == FighterState.Block) {
+                        p1.state = FighterState.Idle
+                        p1.isBlocking = false
+                    }
+                }
+                Key.DirectionLeft, Key.DirectionRight -> {
+                    if (!isSolo && (p2.state == FighterState.RunForward || p2.state == FighterState.RunBackward)) {
+                        p2.state = FighterState.Idle
+                    }
+                }
+            }
+        }
+    }
 
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .size(110.dp)
-                                    .border(
-                                        width = 3.dp,
-                                        brush = Brush.horizontalGradient(
-                                            listOf(FreshGreen, SoftGreen)
-                                        ),
-                                        shape = CircleShape
-                                    )
-                                    .padding(4.dp)
-                            ) {
-                                Image(
-                                    painter = painterResource(id = com.example.R.drawable.profile_img_1780039480588),
-                                    contentDescription = "Profile Photo",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
+    // Resetting fighters positioning on load
+    LaunchedEffect(Unit) {
+        p1.reset(160f)
+        p2.reset(840f)
+        activeProjectiles.clear()
+        activeParticles.clear()
+        focusRequester.requestFocus()
+
+        // Match start countdown timer coroutines loop
+        while (introCountdown > 0) {
+            delay(1000)
+            introCountdown--
+        }
+        introFinished = true
+        matchActive = true
+
+        // Timer counter logic
+        while (matchTimeLeft > 0 && matchActive) {
+            delay(1000)
+            if (!pauseState && !isSlowMotionFinisher) {
+                matchTimeLeft--
+            }
+        }
+    }
+
+    // Core Game/Physics Loop Execution (Runs periodically at 30fps/33ms ticks)
+    LaunchedEffect(matchActive, pauseState, isSlowMotionFinisher) {
+        while (true) {
+            val frameDelay = if (isSlowMotionFinisher) 120L else 33L
+            delay(frameDelay)
+
+            if (pauseState || introCountdown > 0) continue
+
+            // 1. Process physics updates
+            p1.updatePhysics(1000f)
+            p2.updatePhysics(1000f)
+
+            // Auto-align character facing sides
+            if (p1.state != FighterState.KO && p2.state != FighterState.KO) {
+                p1.facingRight = p1.x < p2.x
+                p2.facingRight = p2.x < p1.x
+            }
+
+            // 2. Combo notices fadeout effects
+            if (comboNoticeOpacity > 0f) {
+                comboNoticeOpacity -= 0.04f
+            } else {
+                p1.comboCount = 0
+                p2.comboCount = 0
+            }
+
+            // 3. Screen shake tick updates
+            if (shakeDurationTicks > 0) {
+                val dx = (Math.random() * 20 - 10).toFloat()
+                val dy = (Math.random() * 20 - 10).toFloat()
+                screenShakeOffset = Offset(dx, dy)
+                shakeDurationTicks--
+            } else {
+                screenShakeOffset = Offset(0f, 0f)
+            }
+
+            // 4. Update Game Particles
+            val iterator = activeParticles.iterator()
+            while (iterator.hasNext()) {
+                val part = iterator.next()
+                part.x += part.vx
+                part.y += part.vy
+                part.life--
+                if (part.life <= 0) {
+                    activeParticles.remove(part)
+                }
+            }
+
+            // 5. Update Game Projectiles
+            val pProjIterator = activeProjectiles.iterator()
+            while (pProjIterator.hasNext()) {
+                val proj = pProjIterator.next()
+                if (!proj.isActive) {
+                    activeProjectiles.remove(proj)
+                    continue
+                }
+
+                proj.x += proj.vx
+
+                // Out of screen constraints bounds
+                if (proj.x < 10f || proj.x > 990f) {
+                    proj.isActive = false
+                    continue
+                }
+
+                // Check collision with opponent
+                val target = if (proj.ownerId == 1) p2 else p1
+                val distanceToTarget = abs(proj.x - target.x)
+                val sameElevation = abs(proj.y - (target.y - 60f)) < 70f
+
+                if (distanceToTarget < 50f && sameElevation && target.state != FighterState.KO) {
+                    // Detonated Projectile! Damage logic
+                    if (target.state == FighterState.Block) {
+                        target.health = max(0f, target.health - 4.5f)
+                        playCombatSound("block")
+                    } else {
+                        target.health = max(0f, target.health - 22f)
+                        target.state = FighterState.Hit
+                        target.stateTimeLeft = 14
+                        target.vx = (if (proj.vx > 0) 1f else -1f) * 26f
+                        target.vy = -8f
+                        playCombatSound("hit")
+                    }
+                    proj.isActive = false
+                    triggerScreenShake(12)
+                    triggerHitEffect(target.x, target.y - 60f, proj.isElectric)
+                }
+            }
+
+            // 6. ADAPTIVE SOLO COMBAT AI LOGIC
+            if (isSolo && p2.state != FighterState.KO && p1.state != FighterState.KO) {
+                val aiDist = abs(p2.x - p1.x)
+                val aiDifficult = store.isAiDifficult()
+
+                // Decide next AI moves asynchronously inside game ticks
+                if (p2.stateTimeLeft == 0) {
+                    if (aiDist > 200f) {
+                        // Head towards player character
+                        val speed = if (aiDifficult) 13f else 9f
+                        val runDirection = if (p1.x > p2.x) 1f else -1f
+                        p2.vx = runDirection * speed
+                        p2.state = if (runDirection > 0) FighterState.RunForward else FighterState.RunBackward
+                    } else {
+                        // Nearby Close Range: Combat AI decision matrix
+                        val strikeRoll = Math.random()
+                        if (p2.energy >= 100f && strikeRoll < 0.3) {
+                            shootSpecialProjectile(p2)
+                        } else if (strikeRoll < (if (aiDifficult) 0.15 else 0.07)) {
+                            // Punch trigger attack
+                            p2.state = FighterState.Punch
+                            p2.stateTimeLeft = 8
+                            playCombatSound("punch")
+                            checkAttackHit(p2, p1, isPunch = true)
+                        } else if (strikeRoll < (if (aiDifficult) 0.28 else 0.13)) {
+                            // Kick trigger attack
+                            p2.state = FighterState.Kick
+                            p2.stateTimeLeft = 10
+                            playCombatSound("kick")
+                            checkAttackHit(p2, p1, isPunch = false)
+                        } else if (p1.state == FighterState.Punch || p1.state == FighterState.Kick) {
+                            // Defense block adaptation
+                            val blockRoll = Math.random()
+                            if (blockRoll < (if (aiDifficult) 0.85 else 0.35)) {
+                                p2.state = FighterState.Block
+                                p2.isBlocking = true
+                                p2.stateTimeLeft = 12
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = user.name.ifEmpty { "Aiman Chowdhury" },
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = FreshGreen
-                            )
-                            Text(
-                                text = if (isBn) "📍 পতেঙ্গা, চট্টগ্রাম" else "📍 Patenga, Chattogram",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                fontWeight = FontWeight.Medium
-                            )
                         }
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+            // 7. WIN/LOSS DECISION TRIGGER KO CHECK
+            if ((p1.health <= 0f || p2.health <= 0f) && matchActive) {
+                if (isSlowMotionFinisher) {
+                    // Match completed
+                    matchActive = false
+                    val winnerName = if (p1.health > p2.health) p1.name else p2.name
+                    if (p1.health > p2.health) {
+                        store.incrementWins()
+                    }
+                    store.incrementMatches()
 
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text(Trans.t("name", isBn)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = phoneInput,
-                        onValueChange = { phoneInput = it },
-                        label = { Text(Trans.t("phone", isBn)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = addressInput,
-                        onValueChange = { addressInput = it },
-                        label = { Text(Trans.t("address", isBn)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    val summaryString = """
+                        🏆 MATCH BREAKDOWN REPORT:
+                        ------------------------------
+                        • Winner Fighter: $winnerName
+                        • Hits Landed: P1 (${player1Hits}) | P2 (${player2Hits})
+                        • Max Combo Strike: $p1MaxCombo
+                        • Rounds Remaining Time: ${matchTimeLeft}s
+                        • Arena Location: ${arena.displayName}
+                    """.trimIndent()
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    onMatchOver(winnerName, summaryString)
+                } else {
+                    // Epic Slow Motion Finisher Entry Trigger
+                    isSlowMotionFinisher = true
+                    playCombatSound("ko")
+                    triggerScreenShake(24)
+                    if (p1.health <= 0f) p1.state = FighterState.KO
+                    if (p2.health <= 0f) p2.state = FighterState.KO
+                    delay(1200) // Keep slow motion going
+                }
+            }
+
+            // Match timer expiration
+            if (matchTimeLeft <= 0 && matchActive) {
+                matchActive = false
+                val winnerName = if (p1.health >= p2.health) p1.name else p2.name
+                val summaryString = "Match expired due to time constraint! Winner decided by remaining health percentages."
+                onMatchOver(winnerName, summaryString)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent {
+                val isDown = it.type == KeyEventType.KeyDown
+                handlePCControls(it.key, isDown)
+                true
+            }
+            .offset { IntOffset(screenShakeOffset.x.toInt(), screenShakeOffset.y.toInt()) }
+            .background(arena.bgStartColor)
+    ) {
+        // Core Visual Combat Canvas Drawing
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            val scaleX = size.width / 1000f
+            val scaleY = size.height / 500f
+
+            // Arena Background Design drawing neatly
+            when (arena) {
+                BattleArena.Rooftop -> {
+                    // Sky celestial objects: Moon & Stars
+                    drawCircle(Color(0xFFFFF9C4).copy(0.4f), radius = 60f, center = Offset(150f * scaleX, 80f * scaleY))
+                    drawCircle(Color.White, radius = 55f, center = Offset(150f * scaleX, 80f * scaleY))
+
+                    // Draw skyline silhouettes
+                    drawRect(Color(0xFF0C1322), topLeft = Offset(400f * scaleX, 220f * scaleY), size = Size(110f * scaleX, 180f * scaleY))
+                    drawRect(Color(0xFF0F172A), topLeft = Offset(540f * scaleX, 140f * scaleY), size = Size(140f * scaleX, 260f * scaleY))
+                    drawRect(Color(0xFF090D1A), topLeft = Offset(720f * scaleX, 260f * scaleY), size = Size(100f * scaleX, 140f * scaleY))
+
+                    // Draw safety fence bar
+                    drawLine(Color(0xFF334155), Offset(0f, 398f * scaleY), Offset(size.width, 398f * scaleY), strokeWidth = 4f)
+                }
+                BattleArena.FightClub -> {
+                    // Gritty metal mesh & spotlight beam shadow projection representation
+                    drawPath(
+                        Path().apply {
+                            moveTo(size.width / 2 - 120f, 0f)
+                            lineTo(size.width / 2 + 120f, 0f)
+                            lineTo(size.width / 2 + 350f, size.height)
+                            lineTo(size.width / 2 - 350f, size.height)
+                            close()
+                        },
+                        Brush.verticalGradient(
+                            colors = listOf(Color(0xFFFFEE58).copy(0.18f), Color.Transparent)
+                        )
+                    )
+                }
+                BattleArena.StreetArena -> {
+                    // Street lights glow circles
+                    drawCircle(Color(0xFFFFA726).copy(alpha = 0.25f), radius = 100f, center = Offset(200f * scaleX, 120f * scaleY))
+                    drawCircle(Color(0xFFFFA726).copy(alpha = 0.25f), radius = 100f, center = Offset(800f * scaleX, 120f * scaleY))
+                }
+            }
+
+            // Drawn Platform Level (Ground bounds)
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                ),
+                topLeft = Offset(0f, 400f * scaleY),
+                size = Size(size.width, size.height - 400f * scaleY)
+            )
+            // Platform grid line accents for spatial reference
+            drawLine(Color(0xFFFF6600).copy(0.3f), Offset(0f, 400f * scaleY), Offset(size.width, 400f * scaleY), strokeWidth = 5f)
+
+            // 2. Render Projectiles
+            activeProjectiles.forEach { proj ->
+                if (proj.isActive) {
+                    val brush = if (proj.isElectric) {
+                        Brush.radialGradient(colors = listOf(Color.White, Color(0xFF00E5FF), Color.Transparent))
+                    } else {
+                        Brush.radialGradient(colors = listOf(Color.White, Color(0xFFFF3D00), Color.Transparent))
+                    }
+                    drawCircle(
+                        brush = brush,
+                        radius = 28f * scaleX,
+                        center = Offset(proj.x * scaleX, proj.y * scaleY)
+                    )
+                    // Flare lightning vectors representation
+                    if (proj.isElectric) {
+                        drawLine(Color.White, Offset((proj.x - 20) * scaleX, proj.y * scaleY), Offset((proj.x + 20) * scaleX, proj.y * scaleY), strokeWidth = 3f)
+                    }
+                }
+            }
+
+            // 3. Render Particles Splatters
+            activeParticles.forEach { part ->
+                drawCircle(
+                    color = part.color.copy(alpha = part.life.toFloat() / part.maxLife),
+                    radius = part.size * scaleX,
+                    center = Offset(part.x * scaleX, part.y * scaleY)
+                )
+            }
+
+            // 4. Render Fighter - PLAYER 1
+            drawFighterVector(this, p1, scaleX, scaleY)
+
+            // 5. Render Fighter - PLAYER 2 / AI
+            drawFighterVector(this, p2, scaleX, scaleY)
+        }
+
+        // --- HUD Overlay Head up displays ---
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp, start = 14.dp, end = 14.dp)
+        ) {
+            // Player stats health bar layer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // P1 Health/Energy bar
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        p1.name.uppercase() + " (P1)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        style = TextStyle(letterSpacing = 1.sp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .height(18.dp)
+                            .background(Color.DarkGray, RoundedCornerShape(4.dp))
+                    ) {
+                        // Health bar Red/Green gradient
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p1.health / 100f)
+                                .fillMaxHeight()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFFEF4444), Color(0xFF10B981))
+                                    ),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // Energy bar Power indication
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(8.dp)
+                            .background(Color.Black.copy(0.4f), RoundedCornerShape(2.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p1.energy / 100f)
+                                .fillMaxHeight()
+                                .background(Color(0xFF00E5FF), RoundedCornerShape(2.dp))
+                        )
+                    }
+                    if (p1.energy >= 80f) {
+                        Text("SPECIAL POWER READIED!", color = Color(0xFF00E5FF), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Center Timer display badge
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .background(Color(0xFF1E293B), CircleShape)
+                        .border(2.dp, Color(0xFFFFCC00), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$matchTimeLeft",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp
+                    )
+                }
+
+                // P2/AI Health/Energy bar right aligned
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        p2.name.uppercase() + if (isSolo) " (AI)" else " (P2)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        style = TextStyle(letterSpacing = 1.sp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .height(18.dp)
+                            .background(Color.DarkGray, RoundedCornerShape(4.dp)),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p2.health / 100f)
+                                .fillMaxHeight()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFF10B981), Color(0xFF3B82F6))
+                                    ),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(8.dp)
+                            .background(Color.Black.copy(0.4f), RoundedCornerShape(2.dp)),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p2.energy / 100f)
+                                .fillMaxHeight()
+                                .background(Color(0xFFFFA726), RoundedCornerShape(2.dp))
+                        )
+                    }
+                    if (p2.energy >= 80f) {
+                        Text("READY DEVASTATION!", color = Color(0xFFFFA726), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Combo Hit notification overlay text
+            AnimatedVisibility(
+                visible = comboNoticeOpacity > 0f,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    text = showComboText,
+                    color = Color(0xFFFFEE58),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(top = 16.dp),
+                    style = TextStyle(letterSpacing = 1.sp)
+                )
+            }
+        }
+
+        // Main match status overlay: countdown values
+        if (!introFinished) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.4f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (introCountdown > 0) "$introCountdown" else "FIGHT!",
+                    color = if (introCountdown > 0) Color.White else Color(0xFFEF4444),
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
+
+        // Hit action overlay vignette on slow mo finisher K.O. check
+        if (isSlowMotionFinisher) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "K. O.",
+                    color = Color(0xFFEF4444),
+                    fontSize = 80.sp,
+                    fontWeight = FontWeight.Black,
+                    style = TextStyle(letterSpacing = 6.sp)
+                )
+            }
+        }
+
+        // Pause/Settings buttons
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 12.dp, end = 12.dp),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            IconButton(
+                onClick = { pauseState = !pauseState },
+                modifier = Modifier
+                    .background(Color.White.copy(0.2f), CircleShape)
+                    .size(44.dp)
+            ) {
+                Icon(
+                    imageVector = if (pauseState) Icons.Default.PlayArrow else Icons.Default.Close,
+                    contentDescription = "Pause",
+                    tint = Color.White
+                )
+            }
+        }
+
+        // --- PAUSE DIALOG OVERLAY ---
+        if (pauseState) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier.width(300.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text("GAME PAUSED", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+
+                        Button(
+                            onClick = { pauseState = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("RESUME COMBAT", color = Color.White)
+                        }
+
                         Button(
                             onClick = {
-                                onSaveUser(user.copy(name = nameInput, phone = phoneInput, address = addressInput))
+                                p1.reset(160f)
+                                p2.reset(840f)
+                                activeProjectiles.clear()
+                                activeParticles.clear()
+                                matchTimeLeft = 90
+                                introCountdown = 3
+                                introFinished = false
+                                pauseState = false
+                                isSlowMotionFinisher = false
                             },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                            modifier = Modifier.weight(1f)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6600)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (isBn) "তথ্য পরিবর্তন করুন" else "Update Info", color = Color.White)
+                            Text("RESTART MATCH", color = Color.White)
                         }
 
                         OutlinedButton(
-                            onClick = onLogout,
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, BkashPink),
-                            modifier = Modifier.weight(0.8f)
+                            onClick = onQuit,
+                            border = BorderStroke(1.dp, Color.Gray),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(Trans.t("logout", isBn), color = BkashPink)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = if (isBn) "পূর্বের অডারসমূহ" else "Order History logs",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            orders.forEach { order ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("#${order.id}", fontWeight = FontWeight.Bold, color = FreshGreen)
-                            Text(order.timestamp, fontSize = 11.sp, color = Color.Gray)
-                        }
-                        Divider(modifier = Modifier.padding(vertical = 6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(if (isBn) "অবস্থা: ${order.status}" else "Status: ${order.status}", fontSize = 12.sp, color = NagadOrange, fontWeight = FontWeight.Bold)
-                            Text("${Trans.t("price_symbol", isBn)} ${order.totalPrice.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("QUIT TO MENU", color = Color.LightGray)
                         }
                     }
                 }
             }
         }
-    }
-}
 
-// ================= ADMIN SCREEN =================
-@Composable
-fun AdminScreen(
-    isBn: Boolean,
-    store: LocalStoreManager,
-    onProductUpdated: () -> Unit,
-    onStatusChanged: () -> Unit
-) {
-    var pNameEn by remember { mutableStateOf("") }
-    var pNameBn by remember { mutableStateOf("") }
-    var pCatId by remember { mutableStateOf("grocery") }
-    var pPrice by remember { mutableStateOf("") }
-    var pOldPrice by remember { mutableStateOf("") }
-    var pStock by remember { mutableStateOf("") }
-    var pDescEn by remember { mutableStateOf("") }
-    var pDescBn by remember { mutableStateOf("") }
-    var pEmoji by remember { mutableStateOf("🍅") }
-
-    val ordersList = remember(store) { store.getOrders() }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(14.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(
-            text = Trans.t("bazaar_manager", isBn),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = FreshGreen
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Bento Metrics Row from the Sleek Interface
-        Row(
+        // --- ANDROID VIRTUAL CONTROLS OVERLAYS ---
+        // Displayed only if running in a screen context, or generally overlaid on mobile bottom bounds
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color.Gray.copy(0.12f)),
-                elevation = CardDefaults.cardElevation(1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = if (isBn) "আজকের অর্ডারের সংখ্যা" else "DAILY ORDERS",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${1482 + ordersList.size}",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FreshGreen
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("▲ 12.5%", fontSize = 11.sp, color = FreshGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color.Gray.copy(0.12f)),
-                elevation = CardDefaults.cardElevation(1.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = if (isBn) "মোট রাজস্ব (টাকা)" else "REVENUE (BDT)",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    val dynamicRev = ordersList.sumOf { it.totalPrice }.toInt() + 82340
-                    Text(
-                        text = "৳${dynamicRev}",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FreshGreen
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("▲ 8.2%", fontSize = 11.sp, color = FreshGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // PAYMENT VERIFICATION MODULE (bKash/Nagad) from the Sleek Interface spec
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, Color.Gray.copy(0.12f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isBn) "পেমেন্ট যাচাইকরণ" else "Payment Verification",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                // Movement buttons Left container side
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // LEFT Move button
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFFEF3C7), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .size(54.dp)
+                            .background(Color.White.copy(0.18f), RoundedCornerShape(12.dp))
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        p1.vx = -12f
+                                        p1.facingRight = false
+                                        if (p1.y >= 400f) p1.state = FighterState.RunBackward
+                                        tryAwaitRelease()
+                                        if (p1.state == FighterState.RunBackward) p1.state = FighterState.Idle
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (isBn) "৩টি পেন্ডিং" else "3 Pending",
-                            color = Color(0xFFB45309),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Left", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+
+                    // RIGHT Move button
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .background(Color.White.copy(0.18f), RoundedCornerShape(12.dp))
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        p1.vx = 12f
+                                        p1.facingRight = true
+                                        if (p1.y >= 400f) p1.state = FighterState.RunForward
+                                        tryAwaitRelease()
+                                        if (p1.state == FighterState.RunForward) p1.state = FighterState.Idle
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Right", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+
+                    // JUMP Button
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .background(Color.White.copy(0.18f), CircleShape)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        if (p1.y >= 400f) {
+                                            p1.vy = -24f
+                                            p1.state = FighterState.Jump
+                                            playCombatSound("punch")
+                                        }
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Jump", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
 
-                // Pending Transaction 1
+                // Combat attack buttons (Punch/Kick/Special/Block) right side layout
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Gray.copy(0.04f), RoundedCornerShape(12.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(BkashPink, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("BK", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("Hossain Ahmed", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("TRX ID: 9K2J8H3L7", fontSize = 9.sp, color = Color.Gray)
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("৳1,250", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FreshGreen)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Surface(
-                            onClick = { },
-                            color = FreshGreen,
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(22.dp)
-                        ) {
-                            Text(
-                                text = if (isBn) "অনুমোদন" else "APPROVE",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Pending Transaction 2
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Gray.copy(0.04f), RoundedCornerShape(12.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(NagadOrange, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("NG", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("Fatima Begum", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("TRX ID: 4M1N9P2Q", fontSize = 9.sp, color = Color.Gray)
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("৳4,800", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FreshGreen)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Surface(
-                            onClick = { },
-                            color = FreshGreen,
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(22.dp)
-                        ) {
-                            Text(
-                                text = if (isBn) "অনুমোদন" else "APPROVE",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = if (isBn) "নতুন পণ্য" else "Add Dynamic Products",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = FreshGreen
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // ADD NEW PRODUCTS FORM
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = Trans.t("add_product", isBn),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = FreshGreen
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = pNameEn,
-                    onValueChange = { pNameEn = it },
-                    label = { Text(Trans.t("p_name_en", isBn)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                OutlinedTextField(
-                    value = pNameBn,
-                    onValueChange = { pNameBn = it },
-                    label = { Text(Trans.t("p_name_bn", isBn)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Dropdown mock category selection
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(if (isBn) "ক্যাটাগরি" else "Category", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        MarketDetails.categories.forEach { cat ->
-                            val selected = pCatId == cat.id
-                            Surface(
-                                onClick = { pCatId = cat.id },
-                                shape = RoundedCornerShape(4.dp),
-                                color = if (selected) FreshGreen else Color.Gray.copy(0.1f),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            ) {
-                                Text(
-                                    text = if (isBn) cat.nameBn else cat.nameEn,
-                                    fontSize = 10.sp,
-                                    color = if (selected) Color.White else Color.Black,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                    // Block button
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color(0xFF374151).copy(0.8f), RoundedCornerShape(8.dp))
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        p1.state = FighterState.Block
+                                        p1.isBlocking = true
+                                        tryAwaitRelease()
+                                        p1.state = FighterState.Idle
+                                        p1.isBlocking = false
+                                    }
                                 )
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = pPrice,
-                        onValueChange = { pPrice = it },
-                        label = { Text(Trans.t("price", isBn)) },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = pOldPrice,
-                        onValueChange = { pOldPrice = it },
-                        label = { Text("Old Price") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = pStock,
-                        onValueChange = { pStock = it },
-                        label = { Text("Stock") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                OutlinedTextField(
-                    value = pDescEn,
-                    onValueChange = { pDescEn = it },
-                    label = { Text(Trans.t("p_desc_en", isBn)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 2
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                OutlinedTextField(
-                    value = pDescBn,
-                    onValueChange = { pDescBn = it },
-                    label = { Text(Trans.t("p_desc_bn", isBn)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 2
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Select Emoji list
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (isBn) "ইমোজি বাছুন:" else "Emoji Icon:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    listOf("🍎", "🥦", "🦐", "🐟", "🥩", "🍼", "🧼", "🌾", "🍟", "🐓", "🧅", "🍌").forEach { em ->
-                        Text(
-                            text = em,
-                            fontSize = 20.sp,
-                            modifier = Modifier
-                                .clickable { pEmoji = em }
-                                .padding(horizontal = 4.dp)
-                                .border(
-                                    width = 1.5.dp,
-                                    color = if (pEmoji == em) FreshGreen else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Button(
-                    onClick = {
-                        val current = pPrice.toDoubleOrNull() ?: 100.0
-                        val oldStr = pOldPrice.toDoubleOrNull() ?: current
-                        val stockInt = pStock.toIntOrNull() ?: 20
-                        if (pNameEn.isNotEmpty() && pNameBn.isNotEmpty()) {
-                            val newP = Product(
-                                id = "P" + (1000 + Random().nextInt(9000)),
-                                nameEn = pNameEn,
-                                nameBn = pNameBn,
-                                categoryId = pCatId,
-                                currentPrice = current,
-                                oldPrice = oldStr,
-                                stock = stockInt,
-                                descriptionEn = pDescEn.ifEmpty { "Fresh bazaar product imported locally." },
-                                descriptionBn = pDescBn.ifEmpty { "স্থানীয় খামার থেকে সংগৃহীত তাজা পণ্য" },
-                                emoji = pEmoji,
-                                isBestSeller = false,
-                                isNewArrival = true
-                            )
-                            store.addProduct(newP)
-                            onProductUpdated()
-
-                            // Clear Form
-                            pNameEn = ""
-                            pNameBn = ""
-                            pPrice = ""
-                            pOldPrice = ""
-                            pStock = ""
-                            pDescEn = ""
-                            pDescBn = ""
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(Trans.t("save_product", isBn), color = Color.White)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // MANAGE INCOMING CUSTOMER ORDERS
-        Text(
-            text = Trans.t("manage_orders", isBn) + " (${ordersList.size})",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ordersList.forEach { order ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("OrderID: #${order.id}", fontWeight = FontWeight.Bold, color = FreshGreen)
-                    Text("Customer: ${order.customerName} (${order.phoneNumber})", fontSize = 11.sp)
-                    Text("Address: ${order.deliveryAddress}", fontSize = 11.sp, color = Color.Gray)
-                    Text("Payment: ${order.paymentMethod} (TrxID: ${order.transactionId})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Total Taka: ${order.totalPrice.toInt()} Tk", fontSize = 12.sp, color = BkashPink, fontWeight = FontWeight.Bold)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Button(
-                            onClick = {
-                                store.updateOrderStatus(order.id, "Packing Items", 2)
-                                onStatusChanged()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = NagadOrange),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Pack", color = Color.White, fontSize = 11.sp)
-                        }
+                        Text("BLOCK", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
 
-                        Button(
-                            onClick = {
-                                store.updateOrderStatus(order.id, "Out for Delivery", 3)
-                                onStatusChanged()
+                    // Punch Button
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(Color(0xFFEF4444).copy(0.85f), CircleShape)
+                            .clickable {
+                                if (p1.stateTimeLeft == 0) {
+                                    p1.state = FighterState.Punch
+                                    p1.stateTimeLeft = 8
+                                    playCombatSound("punch")
+                                    checkAttackHit(p1, p2, isPunch = true)
+                                }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = SoftGreen),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Ship", color = Color.White, fontSize = 11.sp)
-                        }
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("PUNCH", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
 
-                        Button(
-                            onClick = {
-                                store.updateOrderStatus(order.id, "Delivered", 4)
-                                onStatusChanged()
+                    // Kick Button
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(Color(0xFF3B82F6).copy(0.85f), CircleShape)
+                            .clickable {
+                                if (p1.stateTimeLeft == 0) {
+                                    p1.state = FighterState.Kick
+                                    p1.stateTimeLeft = 10
+                                    playCombatSound("kick")
+                                    checkAttackHit(p1, p2, isPunch = false)
+                                }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Deliver", color = Color.White, fontSize = 11.sp)
-                        }
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("KICK", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
+
+                    // Super Projectile Special Button
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                if (p1.energy >= 80f) Color(0xFFFFD700) else Color.DarkGray.copy(0.6f),
+                                CircleShape
+                            )
+                            .border(1.5.dp, Color.White, CircleShape)
+                            .clickable {
+                                shootSpecialProjectile(p1)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("SUPER", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Quick Tip Box styled matching emerald aesthetics of the Sleek Interface
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = LightGreenBg.copy(alpha = 0.6f)
-            ),
-            border = BorderStroke(1.dp, FreshGreen.copy(alpha = 0.2f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("💡", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isBn) "সহজ পরামর্শ" else "Quick Tip Support",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = DarkGreen
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = if (isBn) {
-                        "বিকাশ বা নগদ ট্রানজেকশন আইডি যাচাই করার পর FreshHat অর্ডার অটোমেটিকভাবে 'প্যাক্ড' বা 'ডেলিভারি' হিসেবে চিহ্নিত করা হয়। অনুমোদনের আগে মার্চেন্ট প্যানেল যাচাই করুন।"
-                    } else {
-                        "FreshHat orders are automatically updated once the transaction ID is verified. Ensure you check the bKash/Nagad Merchant Panel (01867164726) before approval."
-                    },
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    color = DarkGreen.copy(alpha = 0.85f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(30.dp))
     }
 }
 
-// ================= DETAILS OVERLAY =================
-@Composable
-fun DetailsOverlay(
-    product: Product,
-    isBn: Boolean,
-    onDismiss: () -> Unit,
-    onAddToCart: () -> Unit,
-    onBuyNow: () -> Unit
+// Visual drawing extension representing highly customized premium vector joint style fighter models
+fun drawFighterVector(
+    scope: DrawScope,
+    f: FighterCharacter,
+    scX: Float,
+    scY: Float
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(),
-        title = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(130.dp)
-                    .background(LightGreenBg.copy(0.4f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(product.emoji, fontSize = 64.sp)
+    val px = f.x * scX
+    val py = f.y * scY
+
+    // Ground point translation
+    val headRadius = 20f * scX
+    val chestY = py - 70f * scY
+    val faceOffsetHorizontal = if (f.facingRight) 10f * scX else -10f * scX
+
+    // 1. Draw Legs under state orientations
+    val leftLegColor = if (f.isAlamgir) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    val rightLegColor = if (f.isAlamgir) Color(0xFF1E293B) else Color(0xFFD1D5DB)
+
+    when (f.state) {
+        FighterState.Kick -> {
+            // High kick stance - Leg fully raised & extended outward
+            val kickTargetX = if (f.facingRight) px + 75f * scX else px - 75f * scX
+            val kickTargetY = py - 60f * scY
+            scope.drawLine(f.colorAccent, Offset(px, py - 40f * scY), Offset(kickTargetX, kickTargetY), strokeWidth = 14f * scX)
+            // Electric effect around kick foot
+            if (!f.isAlamgir) {
+                scope.drawCircle(
+                    Color(0xFF00E5FF).copy(0.4f),
+                    radius = 24f * scX,
+                    center = Offset(kickTargetX, kickTargetY)
+                )
             }
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isBn) product.nameBn else product.nameEn,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = if (product.stock > 0) Trans.t("in_stock", isBn) else Trans.t("out_of_stock", isBn),
-                        fontSize = 11.sp,
-                        color = if (product.stock > 0) FreshGreen else BkashPink,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+        }
+        else -> {
+            // Legs standing / running walking joint paths representation
+            val movementOffset = if (f.state == FighterState.RunForward || f.state == FighterState.RunBackward) {
+                (sin(System.currentTimeMillis() / 80.0) * 20.0).toFloat()
+            } else 0f
 
-                Spacer(modifier = Modifier.height(8.dp))
+            scope.drawLine(leftLegColor, Offset(px, py - 30f * scY), Offset(px - 15f * scX + movementOffset, py), strokeWidth = 12f * scX)
+            scope.drawLine(rightLegColor, Offset(px, py - 30f * scY), Offset(px + 15f * scX - movementOffset, py), strokeWidth = 12f * scX)
+        }
+    }
 
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = "${Trans.t("price_symbol", isBn)} ${product.currentPrice.toInt()}",
-                        fontSize = 20.sp,
-                        color = FreshGreen,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    if (product.oldPrice > product.currentPrice) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${product.oldPrice.toInt()}",
-                            fontSize = 14.sp,
-                            color = Color.Gray,
-                            textDecoration = TextDecoration.LineThrough
-                        )
-                    }
-                }
+    // 2. Draw Torso / Body (Alamgir: Red Jacket, Khorshed: Blue Hoodie)
+    val torsoColor = if (f.isAlamgir) Color(0xFFEF4444) else Color(0xFF3B82F6)
+    scope.drawRect(
+        color = torsoColor,
+        topLeft = Offset(px - 22f * scX, chestY - 10f * scY),
+        size = Size(44f * scX, 50f * scY),
+        style = Fill
+    )
 
-                Spacer(modifier = Modifier.height(12.dp))
+    // Strip details or hoodies zip draws representation
+    if (f.isAlamgir) {
+        // Black zipper belt or jacket lines
+        scope.drawLine(Color.Black, Offset(px, chestY - 10f * scY), Offset(px, chestY + 40f * scY), strokeWidth = 4f)
+    } else {
+        // Draw combat hood pouch design
+        scope.drawCircle(torsoColor, radius = headRadius + 4f, center = Offset(px, chestY - headRadius))
+    }
 
+    // 3. Draw Arms and Attack segments
+    val gloveColor = if (f.isAlamgir) Color.Black else Color.White
+    when (f.state) {
+        FighterState.Punch -> {
+            // Punching arm fully extended
+            val punchTargetX = if (f.facingRight) px + 75f * scX else px - 75f * scX
+            scope.drawLine(torsoColor, Offset(px, chestY + 10f * scY), Offset(punchTargetX, chestY + 10f * scY), strokeWidth = 10f * scX)
+            scope.drawCircle(gloveColor, radius = 9f * scX, center = Offset(punchTargetX, chestY + 10f * scY))
+
+            // Fire punch particle burst representations
+            if (f.isAlamgir) {
+                scope.drawCircle(
+                    Color(0xFFFF3D00).copy(0.4f),
+                    radius = 24f * scX,
+                    center = Offset(punchTargetX, chestY + 10f * scY)
+                )
+            }
+        }
+        FighterState.Block -> {
+            // Protecting arms crossed
+            scope.drawLine(torsoColor, Offset(px, chestY), Offset(px + faceOffsetHorizontal, chestY - 10f * scY), strokeWidth = 12f * scX)
+            scope.drawCircle(gloveColor, radius = 10f * scX, center = Offset(px + faceOffsetHorizontal, chestY - 10f * scY))
+        }
+        else -> {
+            // Normal fighting passive shield pose arms
+            scope.drawLine(torsoColor, Offset(px - 10f * scX, chestY), Offset(px + faceOffsetHorizontal, chestY + 10f * scY), strokeWidth = 10f * scX)
+            scope.drawCircle(gloveColor, radius = 8f * scX, center = Offset(px + faceOffsetHorizontal, chestY + 10f * scY))
+        }
+    }
+
+    // 4. Draw Face / Head
+    val skinColor = if (f.isAlamgir) Color(0xFFFFD54F) else Color(0xFFFFCC80)
+    scope.drawCircle(skinColor, radius = headRadius, center = Offset(px, chestY - headRadius))
+
+    // Draw Hair or Hood overrides
+    if (f.isAlamgir) {
+        // Slick back black hair styling representation
+        val hPath = Path().apply {
+            moveTo(px - headRadius, chestY - headRadius * 2)
+            lineTo(px + headRadius, chestY - headRadius * 2)
+            lineTo(px + headRadius * 0.5f, chestY - headRadius * 2.5f)
+            lineTo(px - headRadius * 0.5f, chestY - headRadius * 2.5f)
+            close()
+        }
+        scope.drawPath(hPath, Color(0xFF1E293B))
+    }
+
+    // Grimace face on damage Hit
+    if (f.state == FighterState.Hit) {
+        // Disoriented tiny red cross eyes representation
+        scope.drawLine(Color.Red, Offset(px - 6f, chestY - headRadius - 4f), Offset(px - 2f, chestY - headRadius), strokeWidth = 3f)
+        scope.drawLine(Color.Red, Offset(px + 2f, chestY - headRadius - 4f), Offset(px + 6f, chestY - headRadius), strokeWidth = 3f)
+    } else {
+        // Bold martial eyes
+        scope.drawLine(Color.Black, Offset(px - 6f, chestY - headRadius - 2f), Offset(px - 2f, chestY - headRadius - 2f), strokeWidth = 3f)
+        scope.drawLine(Color.Black, Offset(px + 2f, chestY - headRadius - 2f), Offset(px + 6f, chestY - headRadius - 2f), strokeWidth = 3f)
+    }
+}
+
+// ================= 5. MATCH RESULT SCREEN =================
+
+@Composable
+fun MatchResultScreen(
+    winnerName: String,
+    summaryLogs: String,
+    onRestart: () -> Unit,
+    onMainMenu: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF030712))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.width(440.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F2937)),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Text(
-                    text = if (isBn) product.descriptionBn else product.descriptionEn,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
-                    lineHeight = 16.sp,
-                    modifier = Modifier.heightIn(max = 100.dp)
+                    text = "BATTLE CHAMPIONSHIP DECISION",
+                    color = Color(0xFFFFCC00),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(letterSpacing = 2.sp)
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "$winnerName WINS!",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+
+                // Subtitle graphic representations
+                Text("CROWNED AS OFFLINE MINI KING!", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+
+                HorizontalDivider(color = Color.Gray.copy(0.3f))
+
+                // Stats summaries panel
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(0.4f), RoundedCornerShape(8.dp))
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = summaryLogs,
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 18.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedButton(
-                        onClick = onAddToCart,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, FreshGreen),
-                        modifier = Modifier.weight(1f)
+                        onClick = onMainMenu,
+                        border = BorderStroke(1.dp, Color.Gray),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).height(48.dp)
                     ) {
-                        Text(Trans.t("add_to_cart", isBn), color = FreshGreen)
+                        Text("MAIN MENU", color = Color.White)
                     }
 
                     Button(
-                        onClick = onBuyNow,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = FreshGreen),
-                        modifier = Modifier.weight(1.5f)
+                        onClick = {
+                            SoundSynthesizer.playSfx("special")
+                            onRestart()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).height(48.dp)
                     ) {
-                        Text(Trans.t("buy_now", isBn), color = Color.White)
+                        Text("RETRY BATTLE", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
         }
-    )
+    }
 }
